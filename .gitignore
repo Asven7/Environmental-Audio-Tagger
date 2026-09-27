@@ -1,0 +1,49 @@
+# Python virtual environments and bytecode
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test / analysis caches
+.pytest_cache/
+.pytest_tmp/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local configuration / secrets
+.env
+.env.*
+
+# Local datasets (UrbanSound8K must not be committed)
+data/
+UrbanSound8K/
+
+# Model checkpoints are ignored by default.
+*.pt
+*.pth
+*.ckpt
+
+# Generated artifacts are ignored by default. Keep only the small, synthetic,
+# repository demo artifacts used for smoke testing and professor demonstrations.
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/demo_cnn/
+!artifacts/demo_cnn/**
+!artifacts/demo_crnn/
+!artifacts/demo_crnn/**
+!artifacts/demo_pipeline_summary.json
+
+# Temporary/local logs
+*.log

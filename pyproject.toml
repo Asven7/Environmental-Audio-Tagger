@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "environmental-audio-tagger"
+version = "0.1.0"
+description = "A reproducible undergraduate project for window-level multi-label environmental audio tagging using CNN and CRNN models."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = {text = "MIT"}
+authors = [{name = "Undergraduate Computer Engineering Project"}]
+dependencies = [
+  "numpy>=2.0,<3",
+  "pandas>=2.2,<3",
+  "scipy>=1.13,<2",
+  "soundfile>=0.12,<1",
+  "torch>=2.6,<2.11",
+  "torchaudio>=2.6,<2.11",
+  "scikit-learn>=1.5,<2",
+  "PyYAML>=6,<7",
+  "matplotlib>=3.8,<4",
+]
+
+[project.optional-dependencies]
+ui = ["gradio>=5,<7"]
+live = ["sounddevice>=0.5,<0.6"]
+dev = ["pytest>=8,<10"]
+all = ["gradio>=5,<7", "sounddevice>=0.5,<0.6", "pytest>=8,<10"]
+
+[project.scripts]
+esaudio-train = "esaudio.cli:train_entry"
+esaudio-evaluate = "esaudio.cli:evaluate_entry"
+esaudio-infer = "esaudio.cli:infer_entry"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --basetemp=.pytest_tmp"

@@ -1,0 +1,24 @@
+{
+  "class_names": [
+    "demo_tone_180",
+    "demo_tone_260",
+    "demo_tone_360",
+    "demo_tone_480"
+  ],
+  "thresholds": [
+    0.5,
+    0.5,
+    0.4000000059604645,
+    0.5
+  ],
+  "metadata": {
+    "selection": "per-class F1 maximization on validation known samples",
+    "seed": 7,
+    "per_class_validation_f1": [
+      0.782608687877655,
+      0.9333333373069763,
+      0.6666666865348816,
+      0.6000000238418579
+    ]
+  }
+}

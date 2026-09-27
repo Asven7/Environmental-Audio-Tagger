@@ -1,0 +1,339 @@
+{
+  "known": {
+    "precision_micro": 0.5797101449275363,
+    "recall_micro": 0.9090909090909091,
+    "f1_micro": 0.7079646017699115,
+    "precision_macro": 0.657460960092539,
+    "recall_macro": 0.9083333333333334,
+    "f1_macro": 0.7338524104041346,
+    "hamming_loss": 0.29464285714285715,
+    "mAP": 0.8963258106272812,
+    "per_class": {
+      "demo_tone_180": {
+        "precision": 1.0,
+        "recall": 0.8333333333333334,
+        "f1": 0.9090909090909091,
+        "average_precision": 0.94281045751634,
+        "threshold": 0.5
+      },
+      "demo_tone_260": {
+        "precision": 0.7857142857142857,
+        "recall": 1.0,
+        "f1": 0.88,
+        "average_precision": 1.0,
+        "threshold": 0.5
+      },
+      "demo_tone_360": {
+        "precision": 0.42105263157894735,
+        "recall": 0.8,
+        "f1": 0.5517241379310345,
+        "average_precision": 0.7261868686868687,
+        "threshold": 0.5
+      },
+      "demo_tone_480": {
+        "precision": 0.4230769230769231,
+        "recall": 1.0,
+        "f1": 0.5945945945945946,
+        "average_precision": 0.9163059163059164,
+        "threshold": 0.5
+      }
+    }
+  },
+  "groups": {
+    "sample_type=single": {
+      "precision_micro": 0.4,
+      "recall_micro": 1.0,
+      "f1_micro": 0.5714285714285714,
+      "precision_macro": 0.5208333333333333,
+      "recall_macro": 1.0,
+      "f1_macro": 0.6416666666666666,
+      "hamming_loss": 0.375,
+      "mAP": 1.0,
+      "per_class": {
+        "demo_tone_180": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_260": {
+          "precision": 0.5,
+          "recall": 1.0,
+          "f1": 0.6666666666666666,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_360": {
+          "precision": 0.3333333333333333,
+          "recall": 1.0,
+          "f1": 0.5,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_480": {
+          "precision": 0.25,
+          "recall": 1.0,
+          "f1": 0.4,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        }
+      },
+      "n_samples": 12
+    },
+    "sample_type=mix": {
+      "precision_micro": 0.717948717948718,
+      "recall_micro": 0.875,
+      "f1_micro": 0.7887323943661971,
+      "precision_macro": 0.7678571428571428,
+      "recall_macro": 0.873015873015873,
+      "f1_macro": 0.7976270053475936,
+      "hamming_loss": 0.234375,
+      "mAP": 0.9226232872066205,
+      "per_class": {
+        "demo_tone_180": {
+          "precision": 1.0,
+          "recall": 0.7777777777777778,
+          "f1": 0.875,
+          "average_precision": 0.9765432098765432,
+          "threshold": 0.5
+        },
+        "demo_tone_260": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_360": {
+          "precision": 0.5,
+          "recall": 0.7142857142857143,
+          "f1": 0.5882352941176471,
+          "average_precision": 0.7833943833943834,
+          "threshold": 0.5
+        },
+        "demo_tone_480": {
+          "precision": 0.5714285714285714,
+          "recall": 1.0,
+          "f1": 0.7272727272727273,
+          "average_precision": 0.9305555555555556,
+          "threshold": 0.5
+        }
+      },
+      "n_samples": 16
+    },
+    "relative_db=0": {
+      "precision_micro": 0.6842105263157895,
+      "recall_micro": 0.9285714285714286,
+      "f1_micro": 0.7878787878787878,
+      "precision_macro": 0.7571428571428571,
+      "recall_macro": 0.9375,
+      "f1_macro": 0.8166666666666667,
+      "hamming_loss": 0.25,
+      "mAP": 0.9458333333333333,
+      "per_class": {
+        "demo_tone_180": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_260": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_360": {
+          "precision": 0.6,
+          "recall": 0.75,
+          "f1": 0.6666666666666666,
+          "average_precision": 0.9166666666666666,
+          "threshold": 0.5
+        },
+        "demo_tone_480": {
+          "precision": 0.42857142857142855,
+          "recall": 1.0,
+          "f1": 0.6,
+          "average_precision": 0.8666666666666667,
+          "threshold": 0.5
+        }
+      },
+      "n_samples": 7
+    },
+    "overlap_ratio=1": {
+      "precision_micro": 0.6363636363636364,
+      "recall_micro": 0.875,
+      "f1_micro": 0.7368421052631579,
+      "precision_macro": 0.7291666666666666,
+      "recall_macro": 0.9166666666666666,
+      "f1_macro": 0.7666666666666666,
+      "hamming_loss": 0.3125,
+      "mAP": 0.9791666666666666,
+      "per_class": {
+        "demo_tone_180": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_260": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_360": {
+          "precision": 0.6666666666666666,
+          "recall": 0.6666666666666666,
+          "f1": 0.6666666666666666,
+          "average_precision": 0.9166666666666665,
+          "threshold": 0.5
+        },
+        "demo_tone_480": {
+          "precision": 0.25,
+          "recall": 1.0,
+          "f1": 0.4,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        }
+      },
+      "n_samples": 4
+    },
+    "overlap_ratio=0.5": {
+      "precision_micro": 0.75,
+      "recall_micro": 0.875,
+      "f1_micro": 0.8076923076923077,
+      "precision_macro": 0.782142857142857,
+      "recall_macro": 0.8541666666666666,
+      "f1_macro": 0.7922459893048128,
+      "hamming_loss": 0.20833333333333334,
+      "mAP": 0.8987103174603174,
+      "per_class": {
+        "demo_tone_180": {
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "f1": 0.8,
+          "average_precision": 0.9484126984126984,
+          "threshold": 0.5
+        },
+        "demo_tone_260": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 0.9999999999999998,
+          "threshold": 0.5
+        },
+        "demo_tone_360": {
+          "precision": 0.42857142857142855,
+          "recall": 0.75,
+          "f1": 0.5454545454545454,
+          "average_precision": 0.725,
+          "threshold": 0.5
+        },
+        "demo_tone_480": {
+          "precision": 0.7,
+          "recall": 1.0,
+          "f1": 0.8235294117647058,
+          "average_precision": 0.9214285714285713,
+          "threshold": 0.5
+        }
+      },
+      "n_samples": 12
+    },
+    "relative_db=-6": {
+      "precision_micro": 0.7,
+      "recall_micro": 0.875,
+      "f1_micro": 0.7777777777777778,
+      "precision_macro": 0.5,
+      "recall_macro": 0.625,
+      "f1_macro": 0.5416666666666666,
+      "hamming_loss": 0.25,
+      "mAP": 0.8333333333333333,
+      "per_class": {
+        "demo_tone_180": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "average_precision": NaN,
+          "threshold": 0.5
+        },
+        "demo_tone_260": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": NaN,
+          "threshold": 0.5
+        },
+        "demo_tone_360": {
+          "precision": 0.5,
+          "recall": 0.5,
+          "f1": 0.5,
+          "average_precision": 0.8333333333333333,
+          "threshold": 0.5
+        },
+        "demo_tone_480": {
+          "precision": 0.5,
+          "recall": 1.0,
+          "f1": 0.6666666666666666,
+          "average_precision": 0.8333333333333333,
+          "threshold": 0.5
+        }
+      },
+      "n_samples": 4
+    },
+    "relative_db=6": {
+      "precision_micro": 0.8,
+      "recall_micro": 0.8,
+      "f1_micro": 0.8,
+      "precision_macro": 0.8333333333333334,
+      "recall_macro": 0.875,
+      "f1_macro": 0.7916666666666666,
+      "hamming_loss": 0.2,
+      "mAP": 0.971875,
+      "per_class": {
+        "demo_tone_180": {
+          "precision": 1.0,
+          "recall": 0.5,
+          "f1": 0.6666666666666666,
+          "average_precision": 0.8875,
+          "threshold": 0.5
+        },
+        "demo_tone_260": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_360": {
+          "precision": 0.3333333333333333,
+          "recall": 1.0,
+          "f1": 0.5,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        },
+        "demo_tone_480": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "average_precision": 1.0,
+          "threshold": 0.5
+        }
+      },
+      "n_samples": 5
+    }
+  },
+  "known_loss": 0.6512959173747471,
+  "n_known": 28,
+  "rejection": {
+    "known_false_rejection_rate": 0.0,
+    "ood_recall_rejected": 0.0,
+    "ood_false_acceptance_rate": 1.0
+  },
+  "n_ood": 6
+}

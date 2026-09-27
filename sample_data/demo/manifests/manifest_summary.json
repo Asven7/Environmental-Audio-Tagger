@@ -1,0 +1,29 @@
+{
+  "target_classes": [
+    "demo_tone_180",
+    "demo_tone_260",
+    "demo_tone_360",
+    "demo_tone_480"
+  ],
+  "heldout_classes": [
+    "demo_unknown_620",
+    "demo_unknown_790"
+  ],
+  "splits": {
+    "train": {
+      "known_singles": 32,
+      "known_mixtures": 48,
+      "ood_singles": 0
+    },
+    "val": {
+      "known_singles": 12,
+      "known_mixtures": 16,
+      "ood_singles": 6
+    },
+    "test": {
+      "known_singles": 12,
+      "known_mixtures": 16,
+      "ood_singles": 6
+    }
+  }
+}

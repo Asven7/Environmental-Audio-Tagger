@@ -1,0 +1,62 @@
+project:
+  name: environmental-audio-tagger
+  sample_rate: 22050
+  window_seconds: 2.0
+  hop_seconds: 1.0
+  target_classes:
+    - air_conditioner
+    - children_playing
+    - dog_bark
+    - drilling
+    - engine_idling
+    - jackhammer
+    - siren
+    - car_horn
+  heldout_classes:
+    - gun_shot
+    - street_music
+
+data:
+  train_folds: [1, 2, 3, 4, 5, 6, 7]
+  val_folds: [8]
+  test_folds: [9, 10]
+  train_crop_strategy: energy
+  eval_crop_strategy: center
+  target_rms_dbfs: -20.0
+features:
+  n_fft: 1024
+  hop_length: 512
+  n_mels: 64
+  f_min: 20.0
+  f_max: 10000.0
+  normalize_features: true
+model:
+  cnn_channels: [16, 32, 64]
+  recurrent_type: gru
+  recurrent_hidden: 64
+  recurrent_layers: 1
+  dropout: 0.2
+training:
+  batch_size: 32
+  epochs: 30
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 5
+  use_pos_weight: true
+  data_seed: 1234
+  seeds: [13, 23, 37]
+  device: auto
+augmentation:
+  enabled: true
+  gain_db: 3.0
+  max_shift_seconds: 0.1
+  noise_probability: 0.25
+  noise_snr_db: 25.0
+mixing:
+  relative_db_levels: [-6.0, 0.0, 6.0]
+  overlap_ratios: [0.25, 0.5, 1.0]
+  train_mixtures: 4000
+  val_mixtures: 600
+  test_mixtures: 1200
+evaluation:
+  threshold_grid: [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90]

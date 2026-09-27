@@ -1,0 +1,57 @@
+project:
+  name: environmental-audio-tagger-demo
+  sample_rate: 8000
+  window_seconds: 1.0
+  hop_seconds: 0.5
+  target_classes:
+    - demo_tone_180
+    - demo_tone_260
+    - demo_tone_360
+    - demo_tone_480
+  heldout_classes:
+    - demo_unknown_620
+    - demo_unknown_790
+data:
+  train_folds: [1]
+  val_folds: [2]
+  test_folds: [3]
+  train_crop_strategy: center
+  eval_crop_strategy: center
+  target_rms_dbfs: -20.0
+features:
+  n_fft: 256
+  hop_length: 128
+  n_mels: 32
+  f_min: 20.0
+  f_max: 3800.0
+  normalize_features: true
+model:
+  cnn_channels: [8, 16]
+  recurrent_type: gru
+  recurrent_hidden: 24
+  recurrent_layers: 1
+  dropout: 0.1
+training:
+  batch_size: 8
+  epochs: 3
+  learning_rate: 0.003
+  weight_decay: 0.0001
+  early_stopping_patience: 3
+  use_pos_weight: true
+  data_seed: 2026
+  seeds: [7]
+  device: cpu
+augmentation:
+  enabled: false
+  gain_db: 2.0
+  max_shift_seconds: 0.02
+  noise_probability: 0.1
+  noise_snr_db: 25.0
+mixing:
+  relative_db_levels: [-6.0, 0.0, 6.0]
+  overlap_ratios: [0.5, 1.0]
+  train_mixtures: 48
+  val_mixtures: 16
+  test_mixtures: 16
+evaluation:
+  threshold_grid: [0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80]

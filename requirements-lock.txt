@@ -1,0 +1,13 @@
+numpy==2.3.5
+pandas==2.2.3
+scipy==1.17.0
+soundfile==0.13.1
+torch==2.10.0
+torchaudio==2.10.0
+scikit-learn==1.8.0
+PyYAML==6.0.3
+matplotlib==3.10.8
+gradio==6.5.1
+pytest==9.0.2
+# Optional live microphone dependency (not available in the execution environment used to build this repository):
+# sounddevice==0.5.3

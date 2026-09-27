@@ -1,0 +1,10 @@
+{
+  "n_samples": 8,
+  "feature_ms_mean": 0.4771193749206759,
+  "inference_ms_mean": 2.220460624982934,
+  "total_ms_mean": 2.8709042500167925,
+  "total_ms_median": 2.7185045000805985,
+  "total_ms_p95": 3.864215099940793,
+  "stream_hop_ms": 500.0,
+  "meets_no_backlog_criterion_p95": true
+}

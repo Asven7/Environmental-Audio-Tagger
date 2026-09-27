@@ -1,0 +1,29 @@
+sample_id,split,sample_type,source_a,source_b,label_indices,label_names,relative_db,overlap_ratio,is_ood
+demo-val-demo_tone_180-000,val,single,audio/val/demo_tone_180/000.wav,,[0],"[""demo_tone_180""]",,0.0,False
+demo-val-demo_tone_180-001,val,single,audio/val/demo_tone_180/001.wav,,[0],"[""demo_tone_180""]",,0.0,False
+demo-val-demo_tone_180-002,val,single,audio/val/demo_tone_180/002.wav,,[0],"[""demo_tone_180""]",,0.0,False
+demo-val-demo_tone_260-000,val,single,audio/val/demo_tone_260/000.wav,,[1],"[""demo_tone_260""]",,0.0,False
+demo-val-demo_tone_260-001,val,single,audio/val/demo_tone_260/001.wav,,[1],"[""demo_tone_260""]",,0.0,False
+demo-val-demo_tone_260-002,val,single,audio/val/demo_tone_260/002.wav,,[1],"[""demo_tone_260""]",,0.0,False
+demo-val-demo_tone_360-000,val,single,audio/val/demo_tone_360/000.wav,,[2],"[""demo_tone_360""]",,0.0,False
+demo-val-demo_tone_360-001,val,single,audio/val/demo_tone_360/001.wav,,[2],"[""demo_tone_360""]",,0.0,False
+demo-val-demo_tone_360-002,val,single,audio/val/demo_tone_360/002.wav,,[2],"[""demo_tone_360""]",,0.0,False
+demo-val-demo_tone_480-000,val,single,audio/val/demo_tone_480/000.wav,,[3],"[""demo_tone_480""]",,0.0,False
+demo-val-demo_tone_480-001,val,single,audio/val/demo_tone_480/001.wav,,[3],"[""demo_tone_480""]",,0.0,False
+demo-val-demo_tone_480-002,val,single,audio/val/demo_tone_480/002.wav,,[3],"[""demo_tone_480""]",,0.0,False
+mix-val-000000,val,mix,audio/val/demo_tone_360/001.wav,audio/val/demo_tone_180/000.wav,"[0, 2]","[""demo_tone_180"", ""demo_tone_360""]",-6.0,0.5,False
+mix-val-000001,val,mix,audio/val/demo_tone_260/000.wav,audio/val/demo_tone_180/000.wav,"[0, 1]","[""demo_tone_180"", ""demo_tone_260""]",0.0,0.5,False
+mix-val-000002,val,mix,audio/val/demo_tone_480/002.wav,audio/val/demo_tone_260/002.wav,"[1, 3]","[""demo_tone_260"", ""demo_tone_480""]",6.0,1.0,False
+mix-val-000003,val,mix,audio/val/demo_tone_360/001.wav,audio/val/demo_tone_260/000.wav,"[1, 2]","[""demo_tone_260"", ""demo_tone_360""]",-6.0,1.0,False
+mix-val-000004,val,mix,audio/val/demo_tone_360/002.wav,audio/val/demo_tone_180/000.wav,"[0, 2]","[""demo_tone_180"", ""demo_tone_360""]",0.0,0.5,False
+mix-val-000005,val,mix,audio/val/demo_tone_360/002.wav,audio/val/demo_tone_480/001.wav,"[2, 3]","[""demo_tone_360"", ""demo_tone_480""]",6.0,0.5,False
+mix-val-000006,val,mix,audio/val/demo_tone_480/001.wav,audio/val/demo_tone_360/002.wav,"[2, 3]","[""demo_tone_360"", ""demo_tone_480""]",0.0,1.0,False
+mix-val-000007,val,mix,audio/val/demo_tone_360/000.wav,audio/val/demo_tone_180/002.wav,"[0, 2]","[""demo_tone_180"", ""demo_tone_360""]",-6.0,1.0,False
+mix-val-000008,val,mix,audio/val/demo_tone_480/001.wav,audio/val/demo_tone_360/002.wav,"[2, 3]","[""demo_tone_360"", ""demo_tone_480""]",6.0,1.0,False
+mix-val-000009,val,mix,audio/val/demo_tone_360/000.wav,audio/val/demo_tone_180/000.wav,"[0, 2]","[""demo_tone_180"", ""demo_tone_360""]",6.0,0.5,False
+mix-val-000010,val,mix,audio/val/demo_tone_180/000.wav,audio/val/demo_tone_480/002.wav,"[0, 3]","[""demo_tone_180"", ""demo_tone_480""]",-6.0,1.0,False
+mix-val-000011,val,mix,audio/val/demo_tone_480/001.wav,audio/val/demo_tone_260/001.wav,"[1, 3]","[""demo_tone_260"", ""demo_tone_480""]",6.0,0.5,False
+mix-val-000012,val,mix,audio/val/demo_tone_480/000.wav,audio/val/demo_tone_360/001.wav,"[2, 3]","[""demo_tone_360"", ""demo_tone_480""]",6.0,1.0,False
+mix-val-000013,val,mix,audio/val/demo_tone_480/000.wav,audio/val/demo_tone_360/002.wav,"[2, 3]","[""demo_tone_360"", ""demo_tone_480""]",-6.0,0.5,False
+mix-val-000014,val,mix,audio/val/demo_tone_180/002.wav,audio/val/demo_tone_360/002.wav,"[0, 2]","[""demo_tone_180"", ""demo_tone_360""]",-6.0,0.5,False
+mix-val-000015,val,mix,audio/val/demo_tone_260/000.wav,audio/val/demo_tone_480/002.wav,"[1, 3]","[""demo_tone_260"", ""demo_tone_480""]",6.0,0.5,False
