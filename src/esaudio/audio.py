@@ -2,171 +2,222 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
 
 
-EPS = 1e-8
+_FLOAT_EPS = np.finfo(np.float32).eps
+
+
+def _as_mono_float32(waveform: np.ndarray) -> np.ndarray:
+    array = np.asarray(waveform)
+    if array.ndim == 2:
+        # SoundFile uses [samples, channels]. Averaging is deterministic and
+        # prevents the amplitude doubling that summing channels would cause.
+        array = array.mean(axis=1)
+    elif array.ndim != 1:
+        raise ValueError(f"Audio waveform must be 1-D mono or 2-D [samples, channels], got {array.shape}")
+    array = np.asarray(array, dtype=np.float32)
+    if array.size == 0:
+        raise ValueError("Audio waveform is empty")
+    if not np.isfinite(array).all():
+        raise ValueError("Audio waveform contains NaN or infinite values")
+    return np.ascontiguousarray(array)
+
+
+def resample_audio(waveform: np.ndarray, source_sample_rate: int, target_sample_rate: int) -> np.ndarray:
+    """Resample a mono waveform using polyphase filtering."""
+    waveform = _as_mono_float32(waveform)
+    if source_sample_rate <= 0 or target_sample_rate <= 0:
+        raise ValueError("Sample rates must be positive integers")
+    if source_sample_rate == target_sample_rate:
+        return waveform.copy()
+
+    divisor = math.gcd(int(source_sample_rate), int(target_sample_rate))
+    up = int(target_sample_rate) // divisor
+    down = int(source_sample_rate) // divisor
+    result = resample_poly(waveform, up, down)
+    result = np.asarray(result, dtype=np.float32)
+    if not np.isfinite(result).all():
+        raise ValueError("Resampling produced non-finite values")
+    return np.ascontiguousarray(result)
 
 
 def load_audio(path: str | Path, target_sample_rate: int) -> np.ndarray:
-    """Load an audio file as mono float32 and resample when necessary."""
+    """Load an audio file, downmix to mono, and resample to the target rate."""
     path = Path(path)
-    if not path.exists():
+    if not path.is_file():
         raise FileNotFoundError(f"Audio file not found: {path}")
+    if target_sample_rate <= 0:
+        raise ValueError("target_sample_rate must be positive")
 
-    waveform, sample_rate = sf.read(path, dtype="float32", always_2d=True)
-    waveform = waveform.mean(axis=1)
-    if sample_rate != target_sample_rate:
-        g = math.gcd(int(sample_rate), int(target_sample_rate))
-        waveform = resample_poly(
-            waveform,
-            up=int(target_sample_rate) // g,
-            down=int(sample_rate) // g,
-        ).astype(np.float32, copy=False)
-    return np.asarray(waveform, dtype=np.float32)
+    try:
+        audio, source_sample_rate = sf.read(path, dtype="float32", always_2d=True)
+    except (RuntimeError, OSError) as exc:
+        raise ValueError(f"Could not read audio file '{path}': {exc}") from exc
 
-
-def save_audio(path: str | Path, waveform: np.ndarray, sample_rate: int) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(path, np.asarray(waveform, dtype=np.float32), sample_rate)
+    waveform = _as_mono_float32(audio)
+    return resample_audio(waveform, int(source_sample_rate), int(target_sample_rate))
 
 
 def rms(waveform: np.ndarray) -> float:
-    waveform = np.asarray(waveform, dtype=np.float32)
+    waveform = np.asarray(waveform, dtype=np.float64).reshape(-1)
     if waveform.size == 0:
         return 0.0
-    return float(np.sqrt(np.mean(np.square(waveform, dtype=np.float64)) + EPS))
+    return float(np.sqrt(np.mean(np.square(waveform))))
 
 
-def rms_dbfs(waveform: np.ndarray) -> float:
+def rms_dbfs(waveform: np.ndarray, floor_dbfs: float = -120.0) -> float:
+    """Return RMS level in dBFS, with a finite floor for silence."""
     value = rms(waveform)
-    if value <= EPS:
-        return -120.0
+    if value <= 10 ** (floor_dbfs / 20.0):
+        return float(floor_dbfs)
     return float(20.0 * np.log10(value))
 
 
 def normalize_rms(
     waveform: np.ndarray,
     target_dbfs: float = -20.0,
-    max_gain_db: float = 12.0,
-    silence_dbfs: float = -60.0,
+    max_gain_db: float = 20.0,
+    silence_threshold_dbfs: float = -60.0,
 ) -> np.ndarray:
-    """RMS-normalize with bounded gain; silence is left unchanged.
+    """Apply bounded RMS normalization without amplifying silence aggressively.
 
-    The same operation is used for training and inference to reduce train/serve skew.
+    A hard gain limit protects quiet/noisy clips from extreme amplification.
+    Truly silent or very low-energy windows are returned unchanged.
     """
-    waveform = np.asarray(waveform, dtype=np.float32)
+    waveform = _as_mono_float32(waveform)
+    if max_gain_db < 0:
+        raise ValueError("max_gain_db must be non-negative")
     current_dbfs = rms_dbfs(waveform)
-    if current_dbfs <= silence_dbfs:
+    if current_dbfs <= silence_threshold_dbfs:
         return waveform.copy()
 
-    gain_db = min(target_dbfs - current_dbfs, max_gain_db)
-    gain = float(10.0 ** (gain_db / 20.0))
-    normalized = waveform * gain
-    peak = float(np.max(np.abs(normalized))) if normalized.size else 0.0
-    if peak > 0.99:
-        normalized = normalized * (0.99 / peak)
-    return normalized.astype(np.float32, copy=False)
+    gain_db = float(target_dbfs) - current_dbfs
+    gain_db = float(np.clip(gain_db, -max_gain_db, max_gain_db))
+    gain = 10.0 ** (gain_db / 20.0)
+    normalized = waveform * np.float32(gain)
+    return np.asarray(normalized, dtype=np.float32)
 
 
-def pad_or_crop(
-    waveform: np.ndarray,
-    length: int,
-    strategy: Literal["center", "start", "energy"] = "center",
-) -> np.ndarray:
-    waveform = np.asarray(waveform, dtype=np.float32)
-    if length <= 0:
-        raise ValueError("length must be positive")
-    if waveform.size == length:
+def apply_global_time_shift(waveform: np.ndarray, shift_samples: int) -> np.ndarray:
+    """Shift a mono waveform without wrap-around while preserving its length.
+
+    Positive values delay the signal and zero-fill the beginning. Negative values
+    advance the signal and zero-fill the end. This behavior is appropriate for
+    train-time augmentation because samples that move outside the window are
+    intentionally discarded rather than wrapped to the opposite edge.
+    """
+    waveform = _as_mono_float32(waveform)
+    if not isinstance(shift_samples, (int, np.integer)):
+        raise TypeError("shift_samples must be an integer")
+
+    shift = int(shift_samples)
+    if shift == 0:
         return waveform.copy()
-    if waveform.size < length:
-        result = np.zeros(length, dtype=np.float32)
-        result[: waveform.size] = waveform
+
+    result = np.zeros_like(waveform)
+    n_samples = waveform.size
+    if abs(shift) >= n_samples:
         return result
+
+    if shift > 0:
+        result[shift:] = waveform[: n_samples - shift]
+    else:
+        advance = -shift
+        result[: n_samples - advance] = waveform[advance:]
+    return result
+
+
+def _energy_crop_start(waveform: np.ndarray, target_samples: int) -> int:
+    squared = np.square(waveform.astype(np.float64, copy=False))
+    prefix = np.concatenate(([0.0], np.cumsum(squared)))
+    energies = prefix[target_samples:] - prefix[:-target_samples]
+    return int(np.argmax(energies))
+
+
+def pad_or_crop(waveform: np.ndarray, target_samples: int, strategy: str = "center") -> np.ndarray:
+    """Return exactly ``target_samples`` samples using a deterministic strategy.
+
+    Short signals are right-padded with zeros. Long signals may be cropped from
+    the start, center, or the maximum-energy region.
+    """
+    waveform = _as_mono_float32(waveform)
+    if target_samples <= 0:
+        raise ValueError("target_samples must be positive")
+
+    n_samples = waveform.size
+    if n_samples == target_samples:
+        return waveform.copy()
+    if n_samples < target_samples:
+        return np.pad(waveform, (0, target_samples - n_samples), mode="constant").astype(np.float32)
 
     if strategy == "start":
         start = 0
     elif strategy == "center":
-        start = (waveform.size - length) // 2
+        start = (n_samples - target_samples) // 2
     elif strategy == "energy":
-        # Search candidate windows with a reasonably dense stride while keeping cost low.
-        stride = max(1, length // 8)
-        best_start = 0
-        best_energy = -1.0
-        final_start = waveform.size - length
-        candidates = list(range(0, final_start + 1, stride))
-        if candidates[-1] != final_start:
-            candidates.append(final_start)
-        for candidate in candidates:
-            chunk = waveform[candidate : candidate + length]
-            energy = float(np.mean(np.square(chunk, dtype=np.float64)))
-            if energy > best_energy:
-                best_energy = energy
-                best_start = candidate
-        start = best_start
+        start = _energy_crop_start(waveform, target_samples)
     else:
-        raise ValueError(f"Unsupported crop strategy: {strategy}")
-    return waveform[start : start + length].astype(np.float32, copy=True)
+        raise ValueError("strategy must be one of: 'start', 'center', 'energy'")
+    return np.ascontiguousarray(waveform[start : start + target_samples], dtype=np.float32)
 
 
-def apply_global_time_shift(waveform: np.ndarray, shift_samples: int) -> np.ndarray:
-    waveform = np.asarray(waveform, dtype=np.float32)
-    if shift_samples == 0:
-        return waveform.copy()
-    result = np.zeros_like(waveform)
-    if shift_samples > 0:
-        result[shift_samples:] = waveform[:-shift_samples]
-    else:
-        amount = abs(shift_samples)
-        result[:-amount] = waveform[amount:]
-    return result
+def _scale_to_peak_limit(waveform: np.ndarray, peak_limit: float = 0.99) -> np.ndarray:
+    peak = float(np.max(np.abs(waveform))) if waveform.size else 0.0
+    if peak <= peak_limit or peak == 0.0:
+        return np.asarray(waveform, dtype=np.float32)
+    return np.asarray(waveform * (peak_limit / peak), dtype=np.float32)
 
 
 def mix_two_sources(
     first: np.ndarray,
     second: np.ndarray,
-    relative_db: float,
-    overlap_ratio: float,
+    relative_db: float = 0.0,
+    overlap_ratio: float = 1.0,
     target_dbfs: float = -20.0,
 ) -> np.ndarray:
-    """Create a fixed-length two-source mixture.
+    """Create a controlled two-source mixture of equal-length waveforms.
 
-    The first source occupies the full window. The second source is shifted so that
-    `overlap_ratio` of its duration remains inside the output window. Positive
-    relative_db means the first source is louder than the second source.
+    ``relative_db`` is defined as first-source level minus second-source level.
+    Therefore ``+6 dB`` makes the first source approximately 6 dB stronger.
+    ``overlap_ratio`` controls how much of the second source is placed inside the
+    output window: 1.0 means full overlap and 0.5 means the second source starts
+    halfway through the window.
     """
-    first = np.asarray(first, dtype=np.float32)
-    second = np.asarray(second, dtype=np.float32)
+    first = _as_mono_float32(first)
+    second = _as_mono_float32(second)
     if first.shape != second.shape:
-        raise ValueError("Both sources must have identical shape")
-    if not 0 < overlap_ratio <= 1:
+        raise ValueError("Sources must have the same shape before mixing")
+    if not 0 < float(overlap_ratio) <= 1:
         raise ValueError("overlap_ratio must be in (0, 1]")
+    if not np.isfinite(float(relative_db)):
+        raise ValueError("relative_db must be finite")
 
-    # Mixture synthesis needs a controlled relative level, so allow a wider
-    # normalization gain range than live inference. Silence is still protected
-    # by normalize_rms' silence gate.
-    a = normalize_rms(first, target_dbfs=target_dbfs, max_gain_db=40.0)
-    b = normalize_rms(second, target_dbfs=target_dbfs, max_gain_db=40.0)
+    # Controlled mixture synthesis benefits from a wider normalization range
+    # than live inference. The silence guard still prevents extreme amplification.
+    first_norm = normalize_rms(first, target_dbfs=target_dbfs, max_gain_db=40.0)
+    second_norm = normalize_rms(second, target_dbfs=target_dbfs, max_gain_db=40.0)
 
-    # Symmetric gain assignment keeps the mixture centered around the target level.
-    a_gain = float(10.0 ** ((relative_db / 2.0) / 20.0))
-    b_gain = float(10.0 ** ((-relative_db / 2.0) / 20.0))
-    a = a * a_gain
-    b = b * b_gain
+    second_gain = 10.0 ** (-float(relative_db) / 20.0)
+    second_norm = second_norm * np.float32(second_gain)
 
-    length = first.size
-    shift = int(round(length * (1.0 - overlap_ratio)))
-    shifted_b = np.zeros(length, dtype=np.float32)
-    shifted_b[shift:] = b[: length - shift]
+    n_samples = first_norm.size
+    overlap_samples = max(1, min(n_samples, round(n_samples * float(overlap_ratio))))
+    second_start = n_samples - overlap_samples
 
-    mixed = a + shifted_b
-    peak = float(np.max(np.abs(mixed))) if mixed.size else 0.0
-    if peak > 0.99:
-        mixed = mixed * (0.99 / peak)
-    mixed = normalize_rms(mixed, target_dbfs=target_dbfs)
-    return mixed.astype(np.float32, copy=False)
+    mixed = first_norm.copy()
+    mixed[second_start:] += second_norm[:overlap_samples]
+    return _scale_to_peak_limit(mixed)
+
+
+def save_audio(path: str | Path, waveform: np.ndarray, sample_rate: int) -> None:
+    """Write a mono float waveform as a WAV-compatible audio file."""
+    if sample_rate <= 0:
+        raise ValueError("sample_rate must be positive")
+    waveform = _as_mono_float32(waveform)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(path, waveform, int(sample_rate))
