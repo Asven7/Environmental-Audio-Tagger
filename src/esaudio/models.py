@@ -23,8 +23,19 @@ class ConvBlock(nn.Module):
 
 
 class ConvFrontend(nn.Module):
+    """Shared convolutional frontend for CNN and CRNN models.
+
+    Input contract: [B, 1, mel_bins, time_frames].
+    Each block halves only the frequency axis and preserves time.
+    """
+
     def __init__(self, channels: list[int], dropout: float) -> None:
         super().__init__()
+        if not channels:
+            raise ValueError("channels must contain at least one positive integer")
+        if any(int(value) <= 0 for value in channels):
+            raise ValueError("all channels must be positive")
+
         blocks = []
         in_channels = 1
         for out_channels in channels:
@@ -32,24 +43,56 @@ class ConvFrontend(nn.Module):
             in_channels = int(out_channels)
         self.blocks = nn.Sequential(*blocks)
         self.output_channels = in_channels
+        self.frequency_reduction = 2 ** len(blocks)
+
+    def _validate_input(self, x: torch.Tensor) -> None:
+        if not isinstance(x, torch.Tensor):
+            raise TypeError("features must be a torch.Tensor")
+        if x.ndim != 4:
+            raise ValueError(
+                "Expected feature tensor shape [B,1,M,T], "
+                f"got {tuple(x.shape)}"
+            )
+        if x.shape[0] <= 0:
+            raise ValueError("feature batch must not be empty")
+        if x.shape[1] != 1:
+            raise ValueError(
+                "Expected exactly one Log-Mel input channel, "
+                f"got {x.shape[1]}"
+            )
+        if x.shape[2] < self.frequency_reduction:
+            raise ValueError(
+                "Mel-frequency dimension is too small for the configured "
+                f"{len(self.blocks)} pooling blocks: got {x.shape[2]}, "
+                f"need at least {self.frequency_reduction}"
+            )
+        if x.shape[3] <= 0:
+            raise ValueError("time-frame dimension must be positive")
+        if not x.is_floating_point():
+            raise TypeError("features must use a floating-point dtype")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self._validate_input(x)
         return self.blocks(x)
 
 
 class CNNTagger(nn.Module):
-    """Baseline CNN using the same convolutional frontend as the CRNN."""
+    """Baseline CNN with global average pooling and raw multi-label logits."""
 
     def __init__(self, num_classes: int, channels: list[int], dropout: float = 0.2) -> None:
         super().__init__()
+        if int(num_classes) <= 0:
+            raise ValueError("num_classes must be positive")
         self.frontend = ConvFrontend(channels, dropout)
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(self.frontend.output_channels, num_classes)
+        self.classifier = nn.Linear(self.frontend.output_channels, int(num_classes))
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
-        x = self.frontend(features)  # [B,C,F,T]
-        x = x.mean(dim=(-2, -1))  # global frequency/time average
+        x = self.frontend(features)  # [B,C,F,T], time preserved by frontend
+        x = x.mean(dim=(-2, -1))  # global frequency/time average -> [B,C]
         x = self.dropout(x)
+        # Deliberately return raw logits. Sigmoid belongs to inference only;
+        # training uses BCEWithLogitsLoss.
         return self.classifier(x)
 
 
