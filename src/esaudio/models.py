@@ -109,30 +109,47 @@ class CRNNTagger(nn.Module):
         dropout: float = 0.2,
     ) -> None:
         super().__init__()
+        if int(num_classes) <= 0:
+            raise ValueError("num_classes must be positive")
+        if int(recurrent_hidden) <= 0:
+            raise ValueError("recurrent_hidden must be positive")
+        if int(recurrent_layers) <= 0:
+            raise ValueError("recurrent_layers must be positive")
+
         self.frontend = ConvFrontend(channels, dropout)
+
         recurrent_type = recurrent_type.lower()
         if recurrent_type not in {"gru", "lstm"}:
             raise ValueError("recurrent_type must be 'gru' or 'lstm'")
-        rnn_cls = nn.GRU if recurrent_type == "gru" else nn.LSTM
+
         self.recurrent_type = recurrent_type
+        self.recurrent_hidden = int(recurrent_hidden)
+        self.recurrent_layers = int(recurrent_layers)
+
+        rnn_cls = nn.GRU if recurrent_type == "gru" else nn.LSTM
         self.rnn = rnn_cls(
             input_size=self.frontend.output_channels,
-            hidden_size=int(recurrent_hidden),
-            num_layers=int(recurrent_layers),
+            hidden_size=self.recurrent_hidden,
+            num_layers=self.recurrent_layers,
             batch_first=True,
             bidirectional=False,
-            dropout=dropout if recurrent_layers > 1 else 0.0,
+            dropout=dropout if self.recurrent_layers > 1 else 0.0,
         )
         self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(int(recurrent_hidden), num_classes)
+        self.classifier = nn.Linear(self.recurrent_hidden, int(num_classes))
 
-    def forward(self, features: torch.Tensor) -> torch.Tensor:
+    def sequence_features(self, features: torch.Tensor) -> torch.Tensor:
+        """Return the [B,T,C] sequence consumed by the recurrent layer."""
         x = self.frontend(features)  # [B,C,F,T]
         x = x.mean(dim=2)  # frequency pooling -> [B,C,T]
-        x = x.transpose(1, 2)  # [B,T,C]
-        sequence, _ = self.rnn(x)
-        x = sequence.mean(dim=1)  # temporal mean pooling
+        return x.transpose(1, 2)  # [B,T,C]
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        x = self.sequence_features(features)
+        sequence, _ = self.rnn(x)  # [B,T,H]
+        x = sequence.mean(dim=1)  # temporal mean pooling -> [B,H]
         x = self.dropout(x)
+        # Raw logits; sigmoid is applied only during inference.
         return self.classifier(x)
 
 
