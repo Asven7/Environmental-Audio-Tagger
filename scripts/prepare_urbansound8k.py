@@ -39,6 +39,8 @@ def main() -> None:
         print(f"  {name}: {Path(path)}")
     print("Source-group leakage check: PASSED")
     print(f"Mixtures included: {args.include_mixtures}")
+    if args.include_mixtures:
+        print("Controlled mixture metadata validation: PASSED")
 
 
 if __name__ == "__main__":

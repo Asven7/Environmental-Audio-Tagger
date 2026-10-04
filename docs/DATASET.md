@@ -116,3 +116,40 @@ Real local verification produced the following leakage-safe single-source manife
 | test | 1374 | 263 |
 
 Two broader `fsID` recordings (`106905`, `180937`) crossed configured split boundaries and were excluded in full, removing 102 clips. Post-exclusion metadata totals are 6190 train, 803 validation, and 1637 test clips. No mixtures are included in the Phase 4 baseline.
+
+## Phase 5 controlled mixtures
+
+After the Phase 4 single-source protocol is frozen, Phase 5 may generate synthetic two-label rows with `--include-mixtures`. Mixtures are created only from known single-source rows already assigned to the same split; held-out OOD classes are not used as known-class mixture sources.
+
+The controlled generator balances the 28 unordered known-class pairs and the configured relative-dB/temporal-overlap conditions, prevents duplicate occurrence-pair recipes, avoids pairing two annotations from the same broader UrbanSound8K `fsID` when identifiable, and records a deterministic protocol audit in `manifest_summary.json`.
+
+Recommended Phase 5 output directory:
+
+```powershell
+python scripts/prepare_urbansound8k.py --dataset-root data\UrbanSound8K --output-dir artifacts\manifests_phase5 --include-mixtures
+```
+
+Then audit the generated metadata:
+
+```powershell
+python scripts/inspect_mixture_manifests.py --manifest-dir artifacts\manifests_phase5
+```
+
+Generated mixtures remain metadata recipes; mixed WAV files are synthesized on demand by the dataset layer and are not committed to Git.
+
+
+### Synthetic demo compatibility
+
+The no-repeat source-pair rule is strict for research manifests carrying explicit `occurrence:fsID:classID:occurrenceID` identities. Tiny synthetic demo manifests use path-fallback identities and may contain fewer possible source pairs than the configured smoke-test mixture count; only those demo/path-fallback manifests may reuse a source pair. This exception is for engineering smoke tests only and is never used for UrbanSound8K research manifests or reported scientific results.
+
+## Verified Phase 5 mixture baseline
+
+The real controlled-mixture manifest generation has been locally verified with the frozen Phase 4 protocol.
+
+| Split | Known singles | Controlled mixtures |
+|---|---:|---:|
+| train | 5209 | 4000 |
+| validation | 673 | 600 |
+| test | 1374 | 1200 |
+
+The generated research manifests passed cross-split source-group leakage checks, class-pair balancing, dB/overlap-condition balancing, and exact mixture-pair uniqueness checks. A real-audio smoke test over three train mixtures also passed without writing derived WAV files.
