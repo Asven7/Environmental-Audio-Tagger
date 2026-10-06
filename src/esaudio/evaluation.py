@@ -4,7 +4,11 @@ from dataclasses import dataclass
 from typing import Iterable
 
 import numpy as np
-from sklearn.metrics import average_precision_score, hamming_loss, precision_recall_fscore_support
+from sklearn.metrics import (
+    average_precision_score,
+    hamming_loss,
+    precision_recall_fscore_support,
+)
 
 
 @dataclass(frozen=True)
@@ -13,13 +17,52 @@ class ThresholdTuningResult:
     per_class_f1: np.ndarray
 
 
+def _validated_scores_and_targets(
+    y_true: np.ndarray,
+    y_scores: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    y_true = np.asarray(y_true)
+    y_scores = np.asarray(y_scores, dtype=np.float32)
+
+    if y_true.ndim != 2 or y_scores.ndim != 2:
+        raise ValueError("y_true and y_scores must be 2D [samples, classes] arrays")
+    if y_true.shape != y_scores.shape:
+        raise ValueError("y_true and y_scores must have identical shape")
+    if y_true.shape[0] == 0 or y_true.shape[1] == 0:
+        raise ValueError("y_true and y_scores must be non-empty")
+    if not np.isfinite(y_scores).all():
+        raise ValueError("y_scores contains non-finite values")
+
+    y_true = y_true.astype(np.int64, copy=False)
+    if not np.logical_or(y_true == 0, y_true == 1).all():
+        raise ValueError("y_true must contain binary 0/1 labels")
+    return y_true, y_scores
+
+
+def _validated_threshold_grid(grid: Iterable[float]) -> np.ndarray:
+    values = np.asarray(list(grid), dtype=np.float64)
+    if values.ndim != 1 or values.size == 0:
+        raise ValueError("threshold grid must be a non-empty 1D sequence")
+    if not np.isfinite(values).all():
+        raise ValueError("threshold grid contains non-finite values")
+    if np.any(values <= 0.0) or np.any(values >= 1.0):
+        raise ValueError("threshold grid values must be strictly between 0 and 1")
+    return np.unique(values)
+
+
 def apply_thresholds(scores: np.ndarray, thresholds: np.ndarray) -> np.ndarray:
     scores = np.asarray(scores, dtype=np.float32)
     thresholds = np.asarray(thresholds, dtype=np.float32)
     if scores.ndim != 2:
         raise ValueError("scores must be a 2D array [samples, classes]")
+    if not np.isfinite(scores).all():
+        raise ValueError("scores contains non-finite values")
     if thresholds.shape != (scores.shape[1],):
         raise ValueError("thresholds must have one value per class")
+    if not np.isfinite(thresholds).all():
+        raise ValueError("thresholds contains non-finite values")
+    if np.any(thresholds < 0.0) or np.any(thresholds > 1.0):
+        raise ValueError("thresholds must be within [0, 1]")
     return (scores >= thresholds[None, :]).astype(np.int64)
 
 
@@ -28,22 +71,41 @@ def tune_per_class_thresholds(
     y_scores: np.ndarray,
     grid: Iterable[float],
 ) -> ThresholdTuningResult:
-    y_true = np.asarray(y_true, dtype=np.int64)
-    y_scores = np.asarray(y_scores, dtype=np.float32)
-    if y_true.shape != y_scores.shape:
-        raise ValueError("y_true and y_scores must have identical shape")
-    grid = np.asarray(list(grid), dtype=np.float32)
-    if grid.size == 0:
-        raise ValueError("threshold grid must not be empty")
+    """Tune one threshold per class by validation F1 only.
+
+    Each validation class must contain at least one positive and one negative example.
+    Ties are resolved deterministically by:
+      1) threshold closest to 0.5;
+      2) lower threshold if distances to 0.5 are identical.
+    """
+
+    y_true, y_scores = _validated_scores_and_targets(y_true, y_scores)
+    grid_values = _validated_threshold_grid(grid)
+
+    positives = y_true.sum(axis=0)
+    negatives = y_true.shape[0] - positives
+    missing_positive = np.flatnonzero(positives <= 0)
+    missing_negative = np.flatnonzero(negatives <= 0)
+    if missing_positive.size:
+        raise ValueError(
+            "Threshold tuning requires at least one positive validation example "
+            f"for every class; missing positive class indices {missing_positive.tolist()}"
+        )
+    if missing_negative.size:
+        raise ValueError(
+            "Threshold tuning requires at least one negative validation example "
+            f"for every class; missing negative class indices {missing_negative.tolist()}"
+        )
 
     thresholds = np.full(y_true.shape[1], 0.5, dtype=np.float32)
     best_f1 = np.zeros(y_true.shape[1], dtype=np.float32)
+
     for class_index in range(y_true.shape[1]):
         class_true = y_true[:, class_index]
         class_scores = y_scores[:, class_index]
-        class_best = -1.0
-        class_threshold = 0.5
-        for threshold in grid:
+        candidates: list[tuple[float, float]] = []
+
+        for threshold in grid_values:
             pred = (class_scores >= threshold).astype(np.int64)
             _, _, f1, _ = precision_recall_fscore_support(
                 class_true,
@@ -51,16 +113,26 @@ def tune_per_class_thresholds(
                 average="binary",
                 zero_division=0,
             )
-            # Deterministic tie-break toward 0.5 to avoid unnecessarily extreme thresholds.
-            if f1 > class_best + 1e-12 or (
-                abs(f1 - class_best) <= 1e-12
-                and abs(float(threshold) - 0.5) < abs(float(class_threshold) - 0.5)
-            ):
-                class_best = float(f1)
-                class_threshold = float(threshold)
-        thresholds[class_index] = class_threshold
-        best_f1[class_index] = max(0.0, class_best)
-    return ThresholdTuningResult(thresholds=thresholds, per_class_f1=best_f1)
+            candidates.append((float(f1), float(threshold)))
+
+        max_f1 = max(item[0] for item in candidates)
+        tied = [
+            threshold
+            for f1, threshold in candidates
+            if abs(f1 - max_f1) <= 1e-12
+        ]
+        class_threshold = min(
+            tied,
+            key=lambda threshold: (abs(threshold - 0.5), threshold),
+        )
+
+        thresholds[class_index] = float(class_threshold)
+        best_f1[class_index] = float(max_f1)
+
+    return ThresholdTuningResult(
+        thresholds=thresholds,
+        per_class_f1=best_f1,
+    )
 
 
 def multilabel_metrics(
@@ -74,6 +146,8 @@ def multilabel_metrics(
     y_pred = apply_thresholds(y_scores, thresholds)
     if y_true.shape != y_pred.shape:
         raise ValueError("y_true and predictions must have identical shape")
+    if class_names is not None and len(class_names) != y_true.shape[1]:
+        raise ValueError("class_names length must match the number of classes")
 
     metrics: dict[str, object] = {}
     for average in ("micro", "macro"):
@@ -95,7 +169,9 @@ def multilabel_metrics(
         if np.unique(labels).size < 2:
             ap_per_class.append(float("nan"))
         else:
-            ap_per_class.append(float(average_precision_score(labels, y_scores[:, class_index])))
+            ap_per_class.append(
+                float(average_precision_score(labels, y_scores[:, class_index]))
+            )
     finite_ap = [value for value in ap_per_class if np.isfinite(value)]
     metrics["mAP"] = float(np.mean(finite_ap)) if finite_ap else float("nan")
 
@@ -128,10 +204,27 @@ def rejection_metrics(
     ood_pred = apply_thresholds(ood_scores, thresholds)
     known_rejected = np.sum(known_pred, axis=1) == 0
     ood_rejected = np.sum(ood_pred, axis=1) == 0
+
+    known_false_rejection = (
+        float(np.mean(known_rejected)) if len(known_rejected) else float("nan")
+    )
+    ood_rejection = (
+        float(np.mean(ood_rejected)) if len(ood_rejected) else float("nan")
+    )
+    ood_false_acceptance = (
+        float(np.mean(~ood_rejected)) if len(ood_rejected) else float("nan")
+    )
+
     return {
-        "known_false_rejection_rate": float(np.mean(known_rejected)) if len(known_rejected) else float("nan"),
-        "ood_recall_rejected": float(np.mean(ood_rejected)) if len(ood_rejected) else float("nan"),
-        "ood_false_acceptance_rate": float(np.mean(~ood_rejected)) if len(ood_rejected) else float("nan"),
+        "known_false_rejection_rate": known_false_rejection,
+        "known_acceptance_rate": (
+            1.0 - known_false_rejection
+            if np.isfinite(known_false_rejection)
+            else float("nan")
+        ),
+        "ood_rejection_rate": ood_rejection,
+        "ood_recall_rejected": ood_rejection,
+        "ood_false_acceptance_rate": ood_false_acceptance,
     }
 
 
@@ -142,18 +235,25 @@ def group_metrics(
     thresholds: np.ndarray,
     class_names: list[str],
 ) -> dict[str, dict]:
-    """Compute metrics for single/mix and controlled mixture conditions."""
+    """Compute metrics for singles, mixtures, and controlled mixture conditions."""
+
     if len(metadata) != len(y_true):
         raise ValueError("metadata length must match number of samples")
     groups: dict[str, list[int]] = {}
+
     for idx, item in enumerate(metadata):
         sample_type = str(item.get("sample_type", "unknown"))
         groups.setdefault(f"sample_type={sample_type}", []).append(idx)
+
         if sample_type == "mix":
-            relative_db = item.get("relative_db")
-            overlap_ratio = item.get("overlap_ratio")
-            groups.setdefault(f"relative_db={float(relative_db):g}", []).append(idx)
-            groups.setdefault(f"overlap_ratio={float(overlap_ratio):g}", []).append(idx)
+            relative_db = float(item.get("relative_db"))
+            overlap_ratio = float(item.get("overlap_ratio"))
+            groups.setdefault(f"relative_db={relative_db:g}", []).append(idx)
+            groups.setdefault(f"overlap_ratio={overlap_ratio:g}", []).append(idx)
+            groups.setdefault(
+                f"mix_condition=relative_db={relative_db:g}|overlap_ratio={overlap_ratio:g}",
+                [],
+            ).append(idx)
 
     result: dict[str, dict] = {}
     for name, indices in groups.items():
