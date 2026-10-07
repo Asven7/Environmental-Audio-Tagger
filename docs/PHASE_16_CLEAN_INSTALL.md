@@ -2,21 +2,22 @@
 
 ## Status
 
-**16A IMPLEMENTED — WAITING FOR USER FRESH-ENVIRONMENT VERIFICATION**
+**USER VERIFIED — FRESH CLONE / FRESH VENV ACCEPTANCE PASSED**
 
 ## Scope
 
-Phase 16 has two controlled parts:
+Phase 16 was intentionally split into:
 
 ```text
 16A — fresh-clone / fresh-venv installation verification
-16B — final user-facing documentation consolidation
+16B — final README + user-facing documentation consolidation
 ```
 
-Phase 16A is implemented first because final documentation should record commands that
-have actually been verified in a clean environment rather than assuming they work.
+Phase 16A was verified before final documentation consolidation so that the published installation instructions are based on a real clean-environment run.
 
-## Added in 16A
+## Phase 16A implementation
+
+Added:
 
 ```text
 scripts/verify_clean_install.py
@@ -46,61 +47,94 @@ UrbanSound8K
 Phase-11 frozen experiment artifacts
 microphone capture
 a GPU
-network access after installation
 held-out scientific evaluation
 ```
 
-## Why a new clone is required
+## Development-checkout verification
 
-Running `pip install` inside the existing development environment would not prove that the
-repository is self-contained.
-
-The Phase-16 acceptance therefore uses:
+Before the clean clone:
 
 ```text
-new clone
-new .venv
-Python 3.11
-CPU PyTorch
-non-editable project install
+clean-install contract tests: 7 passed
+full repository suite: 173 passed
+verify_clean_install.py: PASS
 ```
 
-The existing development checkout remains untouched except for the Phase-16 source/docs
-changes.
+The verifier reported:
 
-## Local source verification before fresh-clone acceptance
+```text
+Python 3.11.9
+package 0.1.0
+Gradio 6.29.1
+sounddevice 0.5.6
+console scripts: esaudio-train, esaudio-evaluate, esaudio-infer
+CNN synthetic CPU forward: PASS
+CRNN synthetic CPU forward: PASS
+```
 
-In the current development checkout:
+## Fresh-clone acceptance
 
-```powershell
-python -m pytest tests/test_clean_install_contract.py -v
+The project was then cloned into a separate directory and installed into a new `.venv`.
+
+The fresh environment used:
+
+```text
+Windows
+Python 3.11.9
+CPU PyTorch installation path
+non-editable python -m pip install ".[all]"
+```
+
+User-reported final acceptance:
+
+```text
+python -m pip check
+  -> No broken requirements found.
+
+python scripts\verify_clean_install.py ...
+  -> status=PASS
+
 python -m pytest
+  -> 173 passed in 8.28s
+
+git status
+  -> branch up to date with origin/main
+  -> nothing to commit, working tree clean
 ```
 
-After those pass, commit/push Phase-16A so that the clean clone contains the new verifier
-and documentation.
-
-The clean-clone procedure is then executed exactly as documented in:
+The acceptance explicitly confirmed:
 
 ```text
-docs/CLEAN_INSTALL.md
+UrbanSound8K was NOT required.
+Frozen experiment artifacts were NOT required.
+Held-out scientific metrics were NOT recomputed.
 ```
 
-## Completion rule
+## Scientific boundary
 
-Phase 16 is not complete after the current-environment tests alone.
-
-16A becomes **USER VERIFIED** only when the user reports a fresh clone and fresh virtual
-environment with:
+Phase 16 did not:
 
 ```text
-pip check = PASS
-verify_clean_install.py = PASS
-full pytest = PASS
-working tree = clean
+retrain a model
+retune thresholds
+modify frozen checkpoints
+change preprocessing
+reselect the deployment seed
+recompute held-out accuracy/F1/mAP
 ```
 
-After that evidence is recorded, 16B will update/consolidate the final README and
-user-facing documentation based on verified commands.
+The clean-install check is an engineering reproducibility result, not a new scientific experiment.
 
-No Phase 17 work begins before Phase 16 is fully verified and committed.
+## Phase 16B
+
+Final documentation consolidation updates:
+
+```text
+README.md
+docs/README.md
+docs/PHASE_16_COMPLETION.md
+```
+
+and adds a documentation contract test to guard the final README's scientific boundary and verified headline results.
+
+Phase 16 is complete only after the Phase-16B documentation tests and full regression suite pass and the documentation commit is cleanly recorded.

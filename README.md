@@ -1,496 +1,375 @@
 # Environmental Audio Tagger
 
-A reproducible undergraduate Computer Engineering project for **window-level multi-label environmental audio tagging** using a lightweight CNN baseline and a CNN+GRU (CRNN) model.
+[![CI](https://github.com/Asven7/Environmental-Audio-Tagger/actions/workflows/ci.yml/badge.svg)](https://github.com/Asven7/Environmental-Audio-Tagger/actions/workflows/ci.yml)
 
-The repository turns a proposal about real-time environmental sound analysis into a runnable local system with:
+A reproducible undergraduate Computer Engineering project for **window-level multi-label environmental audio tagging / event-presence detection** using a CNN baseline and a lightweight CNN+GRU (CRNN) model.
 
-- leakage-safe dataset manifests,
-- controlled two-source synthetic mixtures,
-- shared training/inference Log-Mel preprocessing,
-- CNN and CRNN models,
-- validation-only threshold tuning,
-- multi-label evaluation,
-- held-out-class rejection analysis,
-- file and microphone-oriented inference paths,
-- runtime benchmarking,
-- a Gradio demonstration UI,
-- automated tests,
-- synthetic demo data and demo checkpoints for engineering verification.
+> **Scope:** this project predicts which trained environmental-sound classes are present in each short analysis window. It does **not** estimate exact event onset/offset times and must not be described as full Sound Event Detection (SED).
 
-> **Terminology:** the implemented task is window-level multi-label audio tagging / event-presence detection. It does **not** estimate exact onset/offset times and should not be described as full Sound Event Detection (SED).
+## Project status
 
-## 1. Project Scope
+The research and engineering pipeline is frozen and verified through:
 
-### Core MVP
+- leakage-safe UrbanSound8K split/manifests,
+- controlled two-source multi-label mixtures,
+- shared Log-Mel preprocessing,
+- CNN and CRNN training,
+- validation-only model selection and per-class threshold tuning,
+- one-time frozen held-out evaluation,
+- three-seed aggregation,
+- frozen deployment selection,
+- CPU/CUDA runtime benchmarking,
+- file and microphone inference,
+- Gradio demo UI,
+- repository QA,
+- GitHub Actions CI,
+- fresh-clone / fresh-virtual-environment installation verification.
 
-1. Read file-based environmental audio.
-2. Convert audio to mono, resample, crop/pad to a fixed window, and apply bounded RMS normalization.
-3. Extract Log-Mel spectrograms.
-4. Train a CNN baseline.
-5. Train a lightweight CRNN (CNN + unidirectional GRU).
-6. Train with multi-label `BCEWithLogitsLoss`.
-7. Tune one decision threshold per class using validation data only.
-8. Evaluate with micro/macro Precision, Recall, F1, mAP, and Hamming Loss.
-9. Evaluate controlled two-label mixtures under different relative levels and temporal-overlap ratios.
-10. Measure batch=1 feature/inference/total compute time.
-11. Run window-level inference over files and expose a local demonstration UI.
+The final deployment family is **CRNN**, and deployment seed **23** was selected using validation mAP only.
 
-### Secondary Features
+## Scientific protocol
 
-- Held-out-class rejection analysis (`no_confident_known_class`).
-- Optional continuous microphone inference via `sounddevice`.
-- Multi-seed experiment runner and mean/std aggregation.
-- Synthetic engineering demo dataset.
-
-### Explicitly Out of Scope
-
-- exact event onset/offset estimation,
-- source separation,
-- source counting,
-- sound localization,
-- microphone arrays / beamforming,
-- general open-set recognition,
-- large AudioSet-scale training,
-- cloud production deployment,
-- authentication, database, REST API, microservices, message queues, Kubernetes.
-
-These exclusions are intentional to keep the project technically meaningful and realistic for an undergraduate timeline.
-
-## 2. Architecture
-
-### Training
+Default research protocol:
 
 ```text
-UrbanSound8K metadata
-        |
-        v
-fixed folds + target/held-out classes
-        |
-        v
-single-source manifests -----> no-source-leakage check
-        |
-        +--> controlled two-source mixture manifests
-        |
-        v
-waveform loading / resampling / fixed window
-        |
-        v
-bounded RMS normalization
-        |
-        v
-Log-Mel spectrogram
-        |
-        +--> CNN baseline
-        |
-        +--> CNN + GRU (CRNN)
-        |
-        v
-BCEWithLogitsLoss
-        |
-        v
-validation-only model selection + per-class thresholds
-        |
-        v
-frozen test evaluation
+Dataset: UrbanSound8K
+Task: window-level multi-label audio tagging / event-presence detection
+Sample rate: 22,050 Hz
+Window: 2.0 s
+Hop: 1.0 s
+Features: Log-Mel spectrogram
+n_fft: 1024
+feature hop: 512
+n_mels: 64
+
+Train folds: 1-7
+Validation fold: 8
+Test folds: 9-10
+
+Research seeds: 13, 23, 37
 ```
 
-### Inference
+Target classes:
 
 ```text
-File or microphone stream
-        |
-        v
-fixed-size overlapping windows
-        |
-        v
-same waveform normalization + Log-Mel transform used in training
-        |
-        v
-trained CNN/CRNN
-        |
-        v
-sigmoid scores
-        |
-        v
-per-class thresholds
-        |
-        +--> active known labels
-        +--> no_confident_known_class
+air_conditioner
+children_playing
+dog_bark
+drilling
+engine_idling
+jackhammer
+siren
+car_horn
 ```
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for details.
-
-## 3. Technology Stack
-
-- **Python 3.11–3.13** — main implementation language.
-- **PyTorch** — model definition, training, checkpointing, inference.
-- **torchaudio** — Log-Mel feature extraction.
-- **SoundFile + SciPy** — robust local file loading and resampling.
-- **NumPy / pandas** — waveform operations and experiment manifests.
-- **scikit-learn** — multi-label metrics and threshold evaluation.
-- **Gradio** — simple local university-demo UI.
-- **pytest** — automated tests.
-- **sounddevice** — optional live microphone stream; not required for core training/evaluation.
-
-No database is used because the project data is immutable experiment data and manifests; CSV/JSON files are simpler, inspectable, and sufficient. No backend/API layer is used because inference is local and adding one would not improve the research objective.
-
-## 4. Repository Structure
+Held-out classes used for a limited rejection analysis:
 
 ```text
-environmental-audio-tagger/
-├── config/
-│   ├── default.yaml          # UrbanSound8K experiment configuration
-│   └── demo.yaml             # fast synthetic smoke-test configuration
-├── src/esaudio/
-│   ├── audio.py              # loading, resampling, cropping, normalization, mixing
-│   ├── checkpoints.py        # checkpoint and threshold persistence
-│   ├── cli.py                # train/evaluate/infer entry points
-│   ├── config.py             # YAML loading and validation
-│   ├── dataset.py            # manifest-backed PyTorch dataset + augmentation
-│   ├── demo_data.py          # safe synthetic engineering demo data
-│   ├── evaluate_runner.py    # frozen-checkpoint evaluation orchestration
-│   ├── evaluation.py         # multi-label metrics, thresholds, rejection metrics
-│   ├── features.py           # shared Log-Mel extractor
-│   ├── inference.py          # file/window inference
-│   ├── manifests.py          # UrbanSound8K split/mix manifest generation
-│   ├── models.py             # CNN and CRNN
-│   ├── runtime.py            # batch=1 runtime benchmark
-│   ├── streaming.py          # tested overlapping stream buffer
-│   └── training.py           # deterministic training pipeline
-├── scripts/
-│   ├── prepare_urbansound8k.py
-│   ├── generate_demo_data.py
-│   ├── run_demo_pipeline.py
-│   ├── train_model.py
-│   ├── evaluate_model.py
-│   ├── infer_file.py
-│   ├── benchmark_runtime.py
-│   ├── run_experiments.py
-│   ├── summarize_experiments.py
-│   ├── run_ui.py
-│   └── live_microphone.py
-├── tests/                    # automated unit/integration tests
-├── docs/                     # architecture, decisions, evaluation, traceability, defense guide
-├── sample_data/demo/         # generated synthetic demo audio + manifests
-├── artifacts/demo_cnn/       # verified synthetic CNN smoke artifact
-├── artifacts/demo_crnn/      # verified synthetic CRNN smoke artifact
-├── .gitattributes          # cross-platform line-ending policy
-├── pyproject.toml
-├── requirements-lock.txt
-└── README.md
+gun_shot
+street_music
 ```
 
-## 5. Prerequisites
+The held-out classes are **not** evidence of general open-set recognition.
 
-Recommended:
+## Models
 
-- Python 3.11, 3.12, or 3.13
-- 8+ GB RAM
-- CPU is sufficient for the lightweight models
-- CUDA GPU is optional for faster real-data training
+### CNN baseline
 
-The build environment used to verify this repository had Python 3.13.5, PyTorch 2.10.0 CPU, torchaudio 2.10.0, NumPy 2.3.5, pandas 2.2.3, SciPy 1.17.0, scikit-learn 1.8.0, Gradio 6.5.1, and pytest 9.0.2.
+```text
+Log-Mel
+  -> convolutional frontend
+  -> global pooling
+  -> linear multi-label logits
+```
 
-## 6. Installation
+### CRNN
 
-Create and activate a virtual environment:
+```text
+Log-Mel
+  -> convolutional frontend
+  -> frequency mean pooling
+  -> unidirectional GRU
+  -> temporal mean pooling
+  -> linear multi-label logits
+```
 
-```bash
+Training uses raw logits with `BCEWithLogitsLoss`. Sigmoid is applied only for scores at inference/evaluation time.
+
+## Frozen held-out results
+
+The final research comparison used three seeds per model. Thresholds were selected on validation data only and frozen before held-out test evaluation.
+
+| Model | mAP | F1 micro | F1 macro | Precision micro | Recall micro | Hamming loss |
+|---|---:|---:|---:|---:|---:|---:|
+| CNN | 0.618628 ± 0.008281 | 0.549715 ± 0.004061 | 0.564576 ± 0.003953 | 0.477551 ± 0.001776 | 0.647589 ± 0.008033 | 0.194428 ± 0.000791 |
+| CRNN | **0.727378 ± 0.007039** | **0.592859 ± 0.010359** | **0.617833 ± 0.013461** | **0.520813 ± 0.018149** | **0.688571 ± 0.010842** | **0.173433 ± 0.008472** |
+
+CRNN improved mean held-out mAP by about **0.10875** over the CNN baseline.
+
+### Rejection limitation
+
+The threshold-based `No confident known class` state is only a weak heuristic:
+
+```text
+CNN held-out rejection rate:  ~1.27%
+CRNN held-out rejection rate: ~4.69%
+```
+
+Equivalently, held-out false acceptance remained very high. This project therefore does **not** claim robust unknown-sound or general open-set recognition.
+
+## Frozen deployment
+
+The deployment model was selected using validation performance only:
+
+```text
+model: CRNN
+seed: 23
+validation mAP: 0.6757137110
+```
+
+The research checkpoint and threshold artifacts are local experiment outputs and are not required for repository installation or CI.
+
+When the frozen local artifacts are available, the UI resolves the deployment from:
+
+```text
+artifacts/experiments_phase11
+```
+
+The frozen per-class thresholds for the selected deployment are:
+
+```text
+[0.20, 0.70, 0.75, 0.80, 0.65, 0.35, 0.60, 0.85]
+```
+
+These thresholds must not be changed based on held-out test or live-demo behavior.
+
+## Runtime
+
+Canonical batch-1 frozen runtime measurements on the verified development machine:
+
+| Device | Mean total compute | p95 total compute | 1 s hop backlog criterion |
+|---|---:|---:|---:|
+| CPU | 3.435 ms | **4.358 ms** | PASS |
+| RTX 3050 Ti Laptop GPU | 1.424 ms | **1.561 ms** | PASS |
+
+The first prediction still requires collecting the initial 2-second audio window. The runtime result shows that subsequent per-hop processing does not accumulate backlog; it does not mean zero end-to-end latency.
+
+## Quick start: clean CPU installation on Windows
+
+The clean-install baseline was verified with **Python 3.11.9** in a fresh clone and fresh virtual environment.
+
+```powershell
+git clone https://github.com/Asven7/Environmental-Audio-Tagger.git
+cd Environmental-Audio-Tagger
+
 python -m venv .venv
-source .venv/bin/activate      # Linux/macOS
-# .venv\Scripts\activate       # Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip setuptools wheel
+
+python -m pip install `
+  --index-url https://download.pytorch.org/whl/cpu `
+  "torch>=2.6,<2.11" `
+  "torchaudio>=2.6,<2.11"
+
+python -m pip install ".[all]"
+python -m pip check
+python -m pytest
 ```
 
-Install the project:
-
-```bash
-pip install -e '.[ui,dev]'
-```
-
-For optional continuous microphone inference:
-
-```bash
-pip install -e '.[ui,live,dev]'
-```
-
-If you are in an offline environment where all dependencies are already installed, editable installation can be done without dependency resolution/build isolation:
-
-```bash
-pip install -e . --no-deps --no-build-isolation
-```
-
-## 7. Immediate Demo Without UrbanSound8K
-
-This repository includes a **synthetic engineering smoke dataset** and tiny demo checkpoints. These are only for verifying the software pipeline; they are **not research results** and must not be reported as environmental-audio accuracy.
-
-Run a file prediction:
-
-```bash
-python scripts/infer_file.py \
-  --checkpoint artifacts/demo_crnn/best_model.pt \
-  --thresholds artifacts/demo_crnn/thresholds.json \
-  --audio sample_data/demo/audio/test/demo_tone_180/000.wav
-```
-
-Launch the local UI:
-
-```bash
-python scripts/run_ui.py \
-  --checkpoint artifacts/demo_crnn/best_model.pt \
-  --thresholds artifacts/demo_crnn/thresholds.json
-```
-
-Then open the local address printed by Gradio (normally `http://127.0.0.1:7860`).
-
-To regenerate and re-run the complete engineering smoke pipeline:
-
-```bash
-python scripts/run_demo_pipeline.py
-```
-
-## 8. Preparing UrbanSound8K
-
-The repository intentionally does not redistribute UrbanSound8K. Obtain the dataset from its official source and preserve its original directory layout:
+Phase-16 fresh-clone acceptance completed with:
 
 ```text
-UrbanSound8K/
-├── audio/
-│   ├── fold1/
-│   ├── ...
-│   └── fold10/
-└── metadata/
-    └── UrbanSound8K.csv
+pip check: PASS
+clean-install verifier: PASS
+full pytest: 173 passed
+working tree: clean
 ```
 
-Generate fixed manifests:
+See [`docs/CLEAN_INSTALL.md`](docs/CLEAN_INSTALL.md) for the complete verified procedure.
 
-```bash
-python scripts/prepare_urbansound8k.py \
-  --dataset-root /path/to/UrbanSound8K \
-  --config config/default.yaml \
-  --output-dir artifacts/manifests
+## Verify an installation without the dataset
+
+After installation:
+
+```powershell
+python scripts\verify_clean_install.py `
+  --project-root . `
+  --output artifacts\phase16_clean_install_report.json
 ```
 
-Default research split:
+The verifier checks installed dependencies, console entry points, optional UI/live imports, and synthetic CPU forward passes for both CNN and CRNN. It does not require UrbanSound8K or frozen experiment artifacts.
 
-- train folds: 1–7
-- validation fold: 8
-- test folds: 9–10
+## Synthetic engineering demo
 
-Default target classes:
+The repository contains a synthetic demo path for software verification. Synthetic demo outputs are **not research accuracy results**.
 
-- air_conditioner
-- children_playing
-- dog_bark
-- drilling
-- engine_idling
-- jackhammer
-- siren
-- car_horn
+A file can be processed with the demo CRNN artifact when the demo files are present:
 
-Default held-out classes used only for limited rejection analysis:
-
-- gun_shot
-- street_music
-
-All values are configurable, but once a real experiment begins, class choices and folds should be frozen and documented before examining test results.
-
-## 9. Training
-
-CNN baseline:
-
-```bash
-python scripts/train_model.py \
-  --config config/default.yaml \
-  --model cnn \
-  --train-manifest artifacts/manifests/known_train.csv \
-  --val-manifest artifacts/manifests/known_val.csv \
-  --audio-root /path/to/UrbanSound8K \
-  --output-dir artifacts/cnn_seed13 \
-  --seed 13
+```powershell
+python scripts\infer_file.py `
+  --checkpoint artifacts\demo_crnn\best_model.pt `
+  --thresholds artifacts\demo_crnn\thresholds.json `
+  --audio sample_data\demo\audio\test\demo_tone_180\000.wav
 ```
 
-CRNN:
+The demo UI can be launched with explicit demo artifacts:
 
-```bash
-python scripts/train_model.py \
-  --config config/default.yaml \
-  --model crnn \
-  --train-manifest artifacts/manifests/known_train.csv \
-  --val-manifest artifacts/manifests/known_val.csv \
-  --audio-root /path/to/UrbanSound8K \
-  --output-dir artifacts/crnn_seed13 \
-  --seed 13
+```powershell
+python scripts\run_ui.py `
+  --checkpoint artifacts\demo_crnn\best_model.pt `
+  --thresholds artifacts\demo_crnn\thresholds.json `
+  --device cpu
 ```
 
-Each run produces:
+## Frozen file and microphone demo
 
-- `best_model.pt`
-- `thresholds.json`
-- `history.csv`
-- `training_summary.json`
+With the local frozen research artifacts available:
 
-Model selection uses validation mAP. Per-class thresholds are selected **after loading the best checkpoint** by maximizing per-class F1 on known validation samples only. The test split remains untouched until final evaluation.
-
-## 10. Multi-Seed Research Experiment
-
-The default configuration specifies three seeds: `13, 23, 37`.
-
-```bash
-python scripts/run_experiments.py \
-  --config config/default.yaml \
-  --manifests-dir artifacts/manifests \
-  --audio-root /path/to/UrbanSound8K \
-  --output-root artifacts/experiments
+```powershell
+python scripts\run_ui.py `
+  --experiment-root artifacts\experiments_phase11 `
+  --device cpu
 ```
 
-Aggregate mean and standard deviation:
+The UI supports:
 
-```bash
-python scripts/summarize_experiments.py \
-  --experiment-index artifacts/experiments/experiment_index.json
+- sequential file-window inference,
+- browser microphone streaming,
+- latest per-class scores and frozen thresholds,
+- timestamped history,
+- newest/oldest history ordering,
+- stop-with-history-preservation,
+- explicit clear-results behavior.
+
+For the local `sounddevice` microphone CLI:
+
+```powershell
+python scripts\live_microphone.py `
+  --experiment-root artifacts\experiments_phase11 `
+  --device cpu
 ```
 
-## 11. Evaluation
+List available input devices with:
 
-```bash
-python scripts/evaluate_model.py \
-  --config config/default.yaml \
-  --checkpoint artifacts/crnn_seed13/best_model.pt \
-  --thresholds artifacts/crnn_seed13/thresholds.json \
-  --known-manifest artifacts/manifests/known_test.csv \
-  --ood-manifest artifacts/manifests/ood_test.csv \
-  --audio-root /path/to/UrbanSound8K \
-  --split test \
-  --output artifacts/crnn_seed13/test_evaluation.json
+```powershell
+python scripts\live_microphone.py --list-devices
 ```
 
-The evaluator reports:
+Microphone predictions are qualitative demo evidence unless separately evaluated against annotated real recordings.
 
-- micro Precision / Recall / F1
-- macro Precision / Recall / F1
-- mAP
-- Hamming Loss
-- per-class metrics
-- single vs mixed sample metrics
-- metrics grouped by relative dB level
-- metrics grouped by overlap ratio
-- held-out rejection recall
-- false rejection rate on known inputs
+## Dataset and leakage policy
 
-`no_confident_known_class` means that none of the trained classes crossed its selected threshold. It is deliberately **not** called a complete unknown-sound detector.
+UrbanSound8K is not redistributed by this repository.
 
-## 12. Runtime Benchmark
+The research protocol freezes train/validation/test folds before controlled mixing. Two broad `fsID` groups were found to span configured research splits and were excluded from all research manifests to avoid source leakage.
 
-```bash
-python scripts/benchmark_runtime.py \
-  --checkpoint artifacts/crnn_seed13/best_model.pt \
-  --thresholds artifacts/crnn_seed13/thresholds.json \
-  --manifest artifacts/manifests/known_test.csv \
-  --audio-root /path/to/UrbanSound8K \
-  --max-samples 100 \
-  --output artifacts/crnn_seed13/runtime.json
-```
-
-Engineering acceptance criterion:
+Controlled mixtures:
 
 ```text
-p95 total compute time per window < stream hop duration
+two different known target classes
+same research split only
+relative level: -6 / 0 / +6 dB
+overlap ratio: 0.25 / 0.50 / 1.00
 ```
 
-This criterion establishes that the processing chain does not accumulate backlog. It is distinct from initial latency, which necessarily includes collecting the first audio window.
+The split occurs **before mixing**.
 
-## 13. Continuous Microphone Inference
+## Testing and CI
 
-Install the optional `live` dependency and ensure PortAudio/device permissions are available:
+Run the complete local suite with:
 
-```bash
-python scripts/live_microphone.py \
-  --checkpoint artifacts/crnn_seed13/best_model.pt \
-  --thresholds artifacts/crnn_seed13/thresholds.json
+```powershell
+python -m pytest
 ```
 
-The tested `StreamingWindowBuffer` is independent of the microphone backend. Physical microphone operation depends on the local OS/audio device and therefore must be verified on the demonstration machine.
+GitHub Actions runs a CPU repository CI job on pushes to `main` and pull requests. The hosted CI intentionally does not require:
 
-## 14. Testing
-
-Run all automated tests:
-
-```bash
-pytest
+```text
+UrbanSound8K
+local frozen experiment artifacts
+microphone hardware
+CUDA
+repository secrets
 ```
 
-The suite covers:
+CI is an engineering regression gate, not a replacement for the frozen scientific evaluation.
 
-- configuration validation,
-- audio normalization/cropping/mixing,
-- feature extraction,
-- CNN/CRNN forward passes,
-- threshold tuning/metrics,
-- overlapping stream-window generation,
-- synthetic data/manifests and no-source-leakage logic,
-- checkpoint round-trip and end-to-end inference.
+## Repository layout
 
-## 15. Reproducibility Rules
+```text
+Environmental-Audio-Tagger/
+|-- .github/workflows/       # GitHub Actions CI
+|-- config/                  # default + demo configurations
+|-- docs/                    # protocol, results, QA, reproducibility, defense docs
+|-- scripts/                 # research, inference, demo, QA, install-verification scripts
+|-- src/esaudio/             # core Python package
+|-- tests/                   # unit/integration/contract tests
+|-- sample_data/demo/        # synthetic engineering demo data
+|-- artifacts/               # local/generated outputs; selected demo artifacts may exist
+|-- pyproject.toml
+`-- README.md
+```
 
-1. Freeze target/held-out classes before final experiments.
-2. Freeze fold assignments before final experiments.
-3. Generate mixtures only from source files belonging to the same split.
-4. Never tune on test data.
-5. Store model checkpoint, threshold file, config, seed, and results together.
-6. Run at least three seeds for the final CNN/CRNN comparison.
-7. Report mean ± standard deviation across seeds.
-8. Record the reference CPU/GPU/OS/Python/PyTorch versions used for runtime measurements.
-9. Do not report synthetic demo metrics as UrbanSound8K performance.
+## Reproducibility boundary
 
-## 16. Privacy and Security
+The scientific test result is frozen.
 
-- No credentials or external API keys are required.
-- The application does not upload audio to an external service.
-- Microphone audio is processed locally and is not saved by the live CLI.
-- The Gradio server defaults to `127.0.0.1` and `share=False`.
-- Do not expose the demo UI publicly without adding appropriate access controls and upload limits.
+Do **not** use the frozen held-out test results to:
+
+```text
+retune thresholds
+select a new model or seed
+change preprocessing
+change class definitions
+change the split/mixing protocol
+claim a newly improved test score
+```
+
+Do **not rerun the frozen held-out evaluation** as part of ordinary installation, CI, UI work, documentation work, or defense preparation.
+
+Any future model/preprocessing development must declare a new experimental protocol before another held-out evaluation.
+
+## Known limitations
+
+- UrbanSound8K is originally single-label; multi-label evidence is based largely on controlled synthetic mixtures.
+- Synthetic mixtures do not fully represent natural soundscapes.
+- Clip labels do not guarantee perfect event presence in every fixed crop.
+- Scores are sigmoid outputs and are **not claimed to be calibrated probabilities**.
+- Threshold-based rejection performs poorly on held-out classes and is not general open-set recognition.
+- Live microphone audio can produce false positives, particularly under distribution shift.
+- Exact onset/offset localization is outside project scope.
+- Source separation, source counting, and localization are outside project scope.
+- Quantitative live-microphone accuracy would require separately annotated real recordings.
+
+## Documentation
+
+Start with [`docs/README.md`](docs/README.md).
+
+Key documents:
+
+- [`docs/CLEAN_INSTALL.md`](docs/CLEAN_INSTALL.md) — verified fresh installation procedure.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — architecture and data flow.
+- [`docs/SCOPE_AND_ACCEPTANCE.md`](docs/SCOPE_AND_ACCEPTANCE.md) — scope and acceptance boundaries.
+- [`docs/PHASE_11_FINAL_RESULTS.md`](docs/PHASE_11_FINAL_RESULTS.md) — frozen multi-seed research results.
+- [`docs/PHASE_12_RUNTIME_RESULTS.md`](docs/PHASE_12_RUNTIME_RESULTS.md) — frozen runtime measurements.
+- [`docs/PHASE_13_END_TO_END_DEMO.md`](docs/PHASE_13_END_TO_END_DEMO.md) — demo acceptance.
+- [`docs/PHASE_14_QA.md`](docs/PHASE_14_QA.md) — repository QA gate.
+- [`docs/PHASE_15_GITHUB_CI.md`](docs/PHASE_15_GITHUB_CI.md) — CI design.
+- [`docs/PHASE_16_COMPLETION.md`](docs/PHASE_16_COMPLETION.md) — clean-install and documentation closure.
+- [`docs/DEFENSE_DEMO.md`](docs/DEFENSE_DEMO.md) — defense/demo guidance.
+- [`docs/IMPLEMENTATION_REPORT_FA.md`](docs/IMPLEMENTATION_REPORT_FA.md) — Persian implementation report.
+
+## Security and privacy
+
+- No external API keys are required.
+- The application performs local inference.
+- The local microphone CLI does not intentionally persist microphone audio.
+- The Gradio demo defaults to local hosting rather than public sharing.
+- Do not expose the local demo publicly without adding suitable authentication, upload limits, and deployment hardening.
 
 See [`docs/SECURITY_PRIVACY.md`](docs/SECURITY_PRIVACY.md).
 
-## 17. Known Limitations
+## License
 
-- UrbanSound8K is originally single-label; multi-label training/evaluation relies on controlled synthetic mixtures.
-- Clip labels do not guarantee perfect event presence in every fixed crop.
-- Synthetic mixing cannot fully represent real soundscapes.
-- Held-out-class threshold rejection is not general open-set recognition.
-- A known + unknown mixture can still be reported only as the known class.
-- Continuous microphone accuracy requires separately annotated real recordings for quantitative claims.
-- The default project does not estimate exact event boundaries.
-
-## 18. Documentation
-
-- [`docs/SCOPE_AND_ACCEPTANCE.md`](docs/SCOPE_AND_ACCEPTANCE.md)
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/DECISIONS.md`](docs/DECISIONS.md)
-- [`docs/EVALUATION.md`](docs/EVALUATION.md)
-- [`docs/REQUIREMENTS_TRACEABILITY.md`](docs/REQUIREMENTS_TRACEABILITY.md)
-- [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)
-- [`docs/SECURITY_PRIVACY.md`](docs/SECURITY_PRIVACY.md)
-- [`docs/DEFENSE_DEMO.md`](docs/DEFENSE_DEMO.md)
-- [`docs/IMPLEMENTATION_REPORT_FA.md`](docs/IMPLEMENTATION_REPORT_FA.md)
-- [`docs/VERIFICATION.md`](docs/VERIFICATION.md)
-
-## 19. What Counts as Project Completion?
-
-The real research project is complete when:
-
-1. UrbanSound8K manifests are generated and the leakage check passes.
-2. CNN and CRNN train successfully for the frozen protocol.
-3. At least three seeds per model are completed.
-4. Test metrics are generated only after tuning is finished.
-5. Controlled relative-level and overlap groups are reported.
-6. Runtime p95 is measured on a documented reference machine and is below the hop duration.
-7. File-based end-to-end inference works.
-8. Microphone streaming is demonstrated locally or explicitly documented as unavailable due to hardware/OS constraints.
-9. Tests pass.
-10. The final report clearly distinguishes controlled synthetic-mixture evidence from real-world claims.
-
-## 20. License
-
-MIT for the code in this repository. Third-party datasets and libraries retain their own licenses/terms.
+MIT for the code in this repository. Third-party datasets and libraries retain their own licenses and terms.
