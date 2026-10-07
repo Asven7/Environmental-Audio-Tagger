@@ -2,70 +2,167 @@
 from __future__ import annotations
 
 import argparse
+import json
 import queue
-import sys
-import time
+from pathlib import Path
 
-import numpy as np
+import torch
 
+from esaudio.deployment import select_frozen_deployment
 from esaudio.inference import AudioTagger
-from esaudio.streaming import StreamingWindowBuffer
+from esaudio.streaming import StreamingInferenceEngine
+
+
+def _resolve_device(requested: str) -> str:
+    requested = str(requested).lower()
+    if requested == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    if requested == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA requested but not available")
+    if requested not in {"cpu", "cuda"}:
+        raise ValueError("--device must be auto, cpu, or cuda")
+    return requested
+
+
+def _resolve_artifacts(args) -> tuple[Path, Path, str]:
+    if bool(args.checkpoint) != bool(args.thresholds):
+        raise ValueError("--checkpoint and --thresholds must be supplied together")
+    if args.checkpoint:
+        return Path(args.checkpoint), Path(args.thresholds), "explicit"
+
+    selection = select_frozen_deployment(
+        args.experiment_root,
+        model_name="crnn",
+    )
+    return (
+        Path(selection.checkpoint),
+        Path(selection.thresholds),
+        (
+            f"crnn_seed{selection.seed} "
+            f"validation_mAP={selection.best_validation_mAP:.6f}"
+        ),
+    )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Continuous microphone inference")
-    parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--thresholds", required=True)
-    parser.add_argument("--device", default="cpu")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Local sounddevice microphone inference using the frozen rolling "
+            "2-second window / 1-second hop protocol"
+        )
+    )
+    parser.add_argument("--checkpoint")
+    parser.add_argument("--thresholds")
+    parser.add_argument(
+        "--experiment-root",
+        default="artifacts/experiments_phase11",
+    )
+    parser.add_argument(
+        "--device",
+        default="auto",
+        choices=["auto", "cpu", "cuda"],
+    )
+    parser.add_argument("--input-device", default=None)
+    parser.add_argument("--list-devices", action="store_true")
+    parser.add_argument(
+        "--block-seconds",
+        type=float,
+        default=0.1,
+        help="Audio callback block duration; inference hop remains frozen.",
+    )
     args = parser.parse_args()
 
     try:
         import sounddevice as sd
-    except ImportError:
-        print(
-            "sounddevice is not installed. Install the optional live dependency with: pip install '.[live]'",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
+    except ImportError as exc:
+        raise RuntimeError(
+            "sounddevice is required for local microphone capture. "
+            "Install it with: python -m pip install sounddevice"
+        ) from exc
 
-    tagger = AudioTagger.from_files(args.checkpoint, args.thresholds, device=args.device)
-    import torch
-    payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-    hop_seconds = float(payload["project_config"].get("hop_seconds", 1.0))
-    hop_samples = round(hop_seconds * tagger.sample_rate)
-    buffer = StreamingWindowBuffer(tagger.window_samples, hop_samples)
-    audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=32)
+    if args.list_devices:
+        print(sd.query_devices())
+        return
 
-    def callback(indata, frames, timing, status):
+    checkpoint, thresholds, deployment = _resolve_artifacts(args)
+    device = _resolve_device(args.device)
+    tagger = AudioTagger.from_files(
+        checkpoint,
+        thresholds,
+        device=device,
+    )
+    engine = StreamingInferenceEngine(tagger)
+
+    block_seconds = float(args.block_seconds)
+    if block_seconds <= 0:
+        raise ValueError("--block-seconds must be positive")
+    blocksize = max(1, round(tagger.sample_rate * block_seconds))
+
+    chunks: queue.Queue = queue.Queue(maxsize=64)
+    callback_status_messages: queue.Queue = queue.Queue()
+
+    def callback(indata, frames, time_info, status):
+        del frames, time_info
         if status:
-            print(f"Audio status: {status}", file=sys.stderr)
-        mono = np.asarray(indata, dtype=np.float32).mean(axis=1)
+            try:
+                callback_status_messages.put_nowait(str(status))
+            except queue.Full:
+                pass
         try:
-            audio_queue.put_nowait(mono.copy())
+            chunks.put_nowait(indata.copy())
         except queue.Full:
-            print("Audio queue full; dropping chunk", file=sys.stderr)
+            # Do not block PortAudio's real-time callback.
+            try:
+                callback_status_messages.put_nowait(
+                    "audio queue full: input chunk dropped"
+                )
+            except queue.Full:
+                pass
 
-    blocksize = min(hop_samples, round(0.1 * tagger.sample_rate))
-    print("Starting microphone stream. Press Ctrl+C to stop.")
-    print(f"sample_rate={tagger.sample_rate}, window={tagger.window_seconds}s, hop={hop_seconds}s")
-    with sd.InputStream(
-        samplerate=tagger.sample_rate,
-        channels=1,
-        dtype="float32",
-        blocksize=blocksize,
-        callback=callback,
-    ):
-        try:
+    print("=== Live Environmental Audio Tagger ===")
+    print(f"deployment={deployment}")
+    print(f"device={device}")
+    print(f"sample_rate={tagger.sample_rate}")
+    print(
+        f"window_seconds={tagger.window_seconds} "
+        f"hop_seconds={tagger.hop_seconds}"
+    )
+    print("Press Ctrl+C to stop.")
+
+    stream_kwargs = {
+        "samplerate": tagger.sample_rate,
+        "channels": 1,
+        "dtype": "float32",
+        "blocksize": blocksize,
+        "callback": callback,
+    }
+    if args.input_device is not None:
+        stream_kwargs["device"] = args.input_device
+
+    try:
+        with sd.InputStream(**stream_kwargs):
             while True:
-                chunk = audio_queue.get(timeout=1.0)
-                for window in buffer.push(chunk):
-                    result = tagger.predict_waveform(window.waveform)
+                chunk = chunks.get()
+                while not callback_status_messages.empty():
                     print(
-                        f"[{window.index:04d}] labels={result.active_labels or ['NO_CONFIDENT_KNOWN_CLASS']} "
-                        f"compute={result.total_ms:.1f}ms"
+                        "AUDIO_STATUS:",
+                        callback_status_messages.get_nowait(),
                     )
-        except KeyboardInterrupt:
-            print("Stopped.")
+
+                predictions = engine.push(chunk)
+                for prediction in predictions:
+                    payload = prediction.as_dict()
+                    payload["scores"] = {
+                        name: round(float(score), 4)
+                        for name, score in payload["scores"].items()
+                    }
+                    payload["processing_ms"] = round(
+                        float(payload["processing_ms"]),
+                        3,
+                    )
+                    print(json.dumps(payload, ensure_ascii=False))
+    except KeyboardInterrupt:
+        print("\nMicrophone capture stopped.")
 
 
 if __name__ == "__main__":
