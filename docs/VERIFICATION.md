@@ -1,82 +1,179 @@
-# Build Verification Record
+# Verification Record
 
-This document records checks that were actually executed while constructing the repository. It is not a claim about UrbanSound8K research performance.
+This document separates historical engineering smoke checks from the final user-verified scientific and repository state.
 
-## Automated Tests
+## Final repository regression
 
-Command:
-
-```bash
-pytest
-```
-
-Result:
+Phase 16B local verification:
 
 ```text
-13 passed
+tests/test_final_documentation_contract.py: 8 passed
+full repository suite: 181 passed
+git diff --check: PASS
+working tree after commit: clean
 ```
 
-The exact captured output is stored in `artifacts/verification_pytest.txt`.
+The exact future test count may increase; the acceptance rule is a fully passing suite.
 
-## Python Compilation Check
+## Fresh-clone installation verification
 
-Command:
-
-```bash
-python -m compileall -q src scripts tests
-```
-
-Result: PASSED.
-
-Captured in `artifacts/verification_compile.txt`.
-
-## Synthetic End-to-End Training
-
-Command:
-
-```bash
-python scripts/run_demo_pipeline.py
-```
+A separate clone and fresh `.venv` were used with Python 3.11.9.
 
 Verified:
-- synthetic safe audio generation,
-- manifest creation,
-- CNN training,
-- CRNN training,
-- checkpoint creation,
-- validation threshold creation,
-- test evaluation,
-- runtime benchmark.
 
-The produced metrics are engineering smoke-test results only and must not be reported as environmental-audio research results.
+```text
+python -m pip check
+  -> No broken requirements found.
 
-## Saved-Checkpoint Inference
+python scripts\verify_clean_install.py ...
+  -> status=PASS
 
-A synthetic test WAV was passed through the saved CRNN checkpoint and threshold file successfully.
+python -m pytest
+  -> 173 passed
 
-Captured output: `artifacts/verification_inference.json`.
+git status
+  -> clean
+```
 
-## Runtime Smoke Benchmark
+The clean-install verifier confirmed:
 
-The final synthetic CRNN benchmark used 8 prerecorded samples with batch size 1 on the build CPU.
+```text
+UrbanSound8K was NOT required.
+Frozen experiment artifacts were NOT required.
+Held-out scientific metrics were NOT recomputed.
+```
 
-At the final verification run:
+## GitHub CI
 
-- mean total compute time: approximately 2.87 ms,
-- p95 total compute time: approximately 3.86 ms,
-- demo stream hop: 500 ms,
-- no-backlog criterion: PASSED.
+The repository contains `.github/workflows/ci.yml`.
 
-See `artifacts/demo_crnn/runtime.json` for the exact machine-run output.
+The Phase-16B commit:
 
-These numbers are not comparable to the final 22.05 kHz UrbanSound8K model until the real experiment is trained and benchmarked.
+```text
+539418a docs: finalize project documentation and clean-install record
+```
 
-## UI
+was pushed to `main`, and the associated GitHub Actions `CI` run completed successfully.
 
-The Gradio `Blocks` interface was successfully constructed against the saved demo CRNN checkpoint. A local HTTP startup check also returned the Gradio HTML page during construction; physical browser/microphone behavior remains machine-dependent.
+CI checks repository-contained package/test surfaces only; it does not pretend to execute dataset/frozen-artifact-dependent scientific acceptance.
 
-## Not Verified in This Environment
+## Frozen scientific verification
 
-- Physical microphone capture, because no audio input device / `sounddevice` package was available in the headless build environment.
-- Final UrbanSound8K training/evaluation, because the dataset was not supplied.
-- Real-world multi-label soundscape accuracy, because no independently annotated real recording set was supplied.
+Official experiment matrix:
+
+```text
+CNN  × seeds 13, 23, 37
+CRNN × seeds 13, 23, 37
+```
+
+Final held-out headline:
+
+```text
+CNN:
+  mAP       0.618628 ± 0.008281
+  F1 micro  0.549715 ± 0.004061
+  F1 macro  0.564576 ± 0.003953
+
+CRNN:
+  mAP       0.727378 ± 0.007039
+  F1 micro  0.592859 ± 0.010359
+  F1 macro  0.617833 ± 0.013461
+```
+
+See [`PHASE_11_FINAL_RESULTS.md`](PHASE_11_FINAL_RESULTS.md).
+
+No threshold, architecture, preprocessing, class, split, or metric definition was changed after observing the frozen held-out result.
+
+## OOD/rejection verification
+
+Frozen CRNN held-out rejection:
+
+```text
+OOD rejection rate         0.046895 ± 0.025317
+OOD false acceptance rate  0.953105 ± 0.025317
+```
+
+Therefore the repository does **not** claim robust unknown/open-set recognition.
+
+## Frozen deployment verification
+
+Deployment:
+
+```text
+CRNN seed 23
+selected using validation mAP only
+validation mAP = 0.6757137110147023
+```
+
+Frozen hashes:
+
+```text
+checkpoint:
+80079291a52bca7cadd25e39bf05761e378bf619d812c532fa1b2fafc9e615b8
+
+threshold artifact:
+788d5722162b66b75a59bfead064faa5513a5cdcf312e64eca7d0dd95ec022d2
+```
+
+## Runtime verification
+
+Canonical batch-1 p95 total compute:
+
+```text
+CPU  = 4.358 ms
+CUDA = 1.561 ms
+hop  = 1000 ms
+```
+
+Both satisfy the no-backlog criterion on the verified laptop.
+
+See [`PHASE_12_RUNTIME_RESULTS.md`](PHASE_12_RUNTIME_RESULTS.md).
+
+## UI / microphone verification
+
+Verified in Phase 13:
+
+```text
+sequential file inference
+Gradio UI construction and local use
+browser microphone streaming
+history ordering
+Stop preserves results/history
+explicit Clear results
+sounddevice device listing
+physical sounddevice microphone capture
+CPU live inference
+clean shutdown
+```
+
+Live false positives were retained as a documented limitation and did not trigger post-test threshold changes.
+
+## Repository QA verification
+
+Phase 14 verified:
+
+```text
+git diff --check
+pip check
+compileall
+UI CLI surface
+microphone CLI surface
+Phase-13 acceptance
+full pytest
+frozen deployment integrity
+tracked-file hygiene
+```
+
+## Historical synthetic demo verification
+
+The tracked synthetic demo artifacts remain useful for software smoke testing without UrbanSound8K. Their metrics are **not** environmental-audio research results.
+
+## Not quantitatively verified
+
+The repository does not contain a separately annotated real-world multi-label field dataset. Therefore quantitative claims about unconstrained live-microphone accuracy are intentionally not made.
+
+## Scientific boundary
+
+The frozen held-out scientific result must not be rerun as ordinary CI, installation verification, documentation cleanup, UI work, or defense preparation.
+
+Future model/preprocessing development requires a newly declared protocol before another held-out evaluation.

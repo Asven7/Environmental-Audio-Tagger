@@ -4,120 +4,206 @@ This document records recurring development problems and the smallest reliable f
 
 ## `py` command is not recognized
 
-**Meaning:** the Python Launcher for Windows is not installed or not on `PATH`.
+The Windows Python Launcher is not installed or is not on `PATH`.
 
-**Impact on this project:** none, as long as the `python` command resolves to a suitable native Windows CPython installation.
+This project does not require it. Use:
 
-**Check:**
+```powershell
+python -m ...
+```
+
+and verify:
 
 ```powershell
 python -c "import sys; print(sys.executable); print(sys.version)"
 ```
 
-Use `python -m ...` commands throughout the project instead of depending on `py`.
-
 ## `where.exe python` shows `WindowsApps` and `msys64`
 
-The `where.exe` output alone does not prove which interpreter is actually executing. Use:
+Check the interpreter that is actually executing:
 
 ```powershell
 python -c "import sys; print(sys.executable)"
 ```
 
-If it resolves to `C:\msys64\...`, do not install the Windows PyTorch wheels into that interpreter. Use a native Windows CPython 3.11 installation.
+If it resolves to `C:\msys64\...`, use a native Windows CPython 3.11 installation for the verified Windows workflow.
 
 ## PowerShell refuses to activate `.venv`
-
-Typical message: script execution is disabled.
-
-Use a temporary policy for the current PowerShell process:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-Avoid changing the machine-wide policy just for this project.
+This changes only the current process policy.
 
 ## `ModuleNotFoundError: No module named 'esaudio'`
 
-The repository uses a `src/` package layout. Install it in editable mode before running tests:
+The repository uses a `src/` package layout.
+
+For a developer checkout:
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[all]"
 python -m pytest
 ```
 
+For a clean/non-editable install:
+
+```powershell
+python -m pip install ".[all]"
+python -m pytest
+```
+
+Do not manually edit `PYTHONPATH` as the first fix.
+
 ## `torch.cuda.is_available()` returns `False`
 
-First check the NVIDIA driver:
+First:
 
 ```powershell
 nvidia-smi
 ```
 
-Then inspect the installed PyTorch build:
+Then:
 
 ```powershell
 python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available())"
 ```
 
-If `torch.version.cuda` is `None`, a CPU-only wheel was installed. Reinstall the intended CUDA wheel inside the active virtual environment.
+If `torch.version.cuda` is `None`, a CPU-only wheel is installed. Install the intended CUDA wheel inside the active `.venv`.
 
-Do **not** install a full CUDA Toolkit as the first troubleshooting step.
+Do **not** install a standalone CUDA Toolkit as the first troubleshooting step.
 
 ## `CUDA out of memory`
 
-This machine has 4 GB of VRAM. In later training phases, reduce `batch_size` before changing architecture or system software. Close other GPU-heavy applications when running experiments and monitor usage with:
+The verified development GPU has 4 GB VRAM.
+
+Reduce `training.batch_size` before changing architecture or system software, close other GPU-heavy applications, and monitor:
 
 ```powershell
 nvidia-smi -l 2
 ```
 
-## `pip` installs packages outside `.venv`
+Do not change the frozen deployed model after held-out evaluation merely to work around a local runtime environment.
 
-Verify:
+## `pip` installs outside `.venv`
 
 ```powershell
 python -c "import sys; print(sys.executable)"
 python -m pip --version
 ```
 
-Both paths should refer to `.venv`. Prefer `python -m pip` rather than a bare `pip` command.
+Both should point into `.venv`.
 
-## `pytest` fails with `PermissionError` in the Windows user temp directory
+Prefer `python -m pip` to a bare `pip`.
 
-Observed error:
+## `pytest` fails with Windows temp `PermissionError`
+
+Observed class of error:
 
 ```text
-PermissionError: [WinError 5] Access is denied: C:\\Users\\<user>\\AppData\\Local\\Temp\\pytest-of-<user>
+PermissionError: [WinError 5] Access is denied:
+C:\Users\<user>\AppData\Local\Temp\pytest-of-<user>
 ```
 
-**Meaning:** pytest can run the project tests, but Windows denies access to pytest's default temporary-directory root. This is an environment/ACL issue, not an audio-model or CUDA failure.
-
-The repository configures pytest to use a project-local temporary directory instead:
+The repository uses:
 
 ```text
 .pytest_tmp/
 ```
 
-This directory is ignored by Git and is recreated as needed. The normal test command remains:
-
-```powershell
-python -m pytest
-```
-
-For diagnosis, the equivalent one-off command is:
-
-```powershell
-python -m pytest --basetemp=.pytest_tmp
-```
-
-If the one-off command passes while the default command fails, verify that the repository contains the current `pyproject.toml` setting:
+through:
 
 ```toml
 [tool.pytest.ini_options]
 addopts = "-q --basetemp=.pytest_tmp"
 ```
 
-Do not change CUDA, PyTorch, or project source code to solve this specific error.
+Diagnostic equivalent:
+
+```powershell
+python -m pytest --basetemp=.pytest_tmp
+```
+
+Do not change CUDA, the model, or signal-processing code for this filesystem ACL problem.
+
+## Gradio or sounddevice version lookup fails
+
+Do not rely on package-specific `.version` or `__version__` attributes.
+
+Use:
+
+```powershell
+python -c "from importlib.metadata import version; print(version('gradio')); print(version('sounddevice'))"
+```
+
+The verified development versions are:
+
+```text
+Gradio 6.29.1
+sounddevice 0.5.6
+```
+
+## `sounddevice` cannot open the microphone
+
+List devices:
+
+```powershell
+python scripts\live_microphone.py --list-devices
+```
+
+Check Windows microphone privacy/permission settings and confirm the selected device supports input.
+
+The local live CLI was verified with a C-Media microphone at:
+
+```text
+22050 Hz
+1 channel
+float32
+```
+
+A device-specific failure is not evidence that the streaming core is broken.
+
+## Live microphone produces false positives
+
+This is a known scientific limitation, not necessarily a microphone bug.
+
+The frozen CRNN held-out rejection rate is only about 4.69%, and quiet-room/fan audio produced false positive known classes during Phase-13 verification.
+
+Do **not** retune frozen thresholds on live/demo behavior.
+
+Correct wording:
+
+```text
+No confident known class
+```
+
+is a weak threshold heuristic, not robust open-set recognition.
+
+## Clean install fails
+
+Follow [`CLEAN_INSTALL.md`](CLEAN_INSTALL.md) exactly:
+
+```powershell
+python -m pip check
+python scripts\verify_clean_install.py --project-root . --output artifacts\phase16_clean_install_report.json
+python -m pytest
+```
+
+The verified fresh-clone acceptance did not require UrbanSound8K or frozen Phase-11 research artifacts.
+
+## Git shows generated artifacts
+
+Check:
+
+```powershell
+git status --short
+git check-ignore -v artifacts\phase16_clean_install_report.json
+```
+
+Real datasets, normal checkpoints, and experiment outputs must remain ignored. Only the deliberately small synthetic demo artifacts are tracked.
+
+## Final rule
+
+Troubleshooting installation, UI, microphone, or CI must not reopen the frozen scientific protocol. If a future model/preprocessing change is desired, declare a new experiment protocol first.

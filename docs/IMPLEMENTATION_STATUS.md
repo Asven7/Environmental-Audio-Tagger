@@ -1,70 +1,134 @@
 # Implementation Status
 
-Legend:
+## Status model
 
-- **IMPLEMENTED AND VERIFIED** — executed successfully in the build environment.
-- **IMPLEMENTED BUT ENVIRONMENT-DEPENDENT** — code exists; final verification requires hardware/external data unavailable here.
-- **NOT IMPLEMENTED / OPTIONAL** — intentionally outside current MVP.
+- **USER VERIFIED** — the required local acceptance was actually run and reported by the user.
+- **CI VERIFIED** — the hosted GitHub Actions check completed successfully.
+- **FROZEN SCIENTIFIC RESULT** — the result belongs to the already-declared held-out protocol and must not be retuned.
+- **OPTIONAL / FUTURE WORK** — deliberately outside the completed MVP/frozen protocol.
 
-## User Local Verification
+## Final project status
 
-- [x] Hardware/OS inventory received
-- [x] Native Windows Python executable confirmed
-- [x] Project virtual environment created and activated
-- [x] PyTorch/torchaudio installed locally
-- [x] CUDA smoke operation verified locally
-- [x] Editable project installation verified locally
-- [x] Automated tests with normal repository command verified locally (`13 passed`)
+The scientific and engineering implementation through Phase 16B is complete and verified.
 
-## Status Checklist
+```text
+Scientific protocol             USER VERIFIED
+UrbanSound8K manifests          USER VERIFIED
+Controlled mixtures             USER VERIFIED
+CNN baseline                    USER VERIFIED
+CRNN                            USER VERIFIED
+Three-seed experiment matrix    USER VERIFIED
+Frozen held-out evaluation      USER VERIFIED
+Runtime CPU/CUDA                USER VERIFIED
+File inference                  USER VERIFIED
+Browser microphone UI           USER VERIFIED
+sounddevice microphone CLI      USER VERIFIED
+Repository QA                   USER VERIFIED
+Clean fresh-clone install       USER VERIFIED
+GitHub CI                       CI VERIFIED
+Final README/docs               USER VERIFIED
+```
 
-- [x] Requirement analysis and final scope locked — IMPLEMENTED AND VERIFIED
-- [x] Architecture documented — IMPLEMENTED AND VERIFIED
-- [x] Project packaging/configuration — IMPLEMENTED AND VERIFIED
-- [x] Audio loading/preprocessing — IMPLEMENTED AND VERIFIED
-- [x] Leakage-safe manifests — IMPLEMENTED AND VERIFIED
-- [x] Controlled mixture generator — IMPLEMENTED AND VERIFIED
-- [x] Log-Mel extractor — IMPLEMENTED AND VERIFIED
-- [x] CNN baseline — IMPLEMENTED AND VERIFIED
-- [x] CRNN (CNN+GRU) — IMPLEMENTED AND VERIFIED
-- [x] Training loop/checkpointing — IMPLEMENTED AND VERIFIED on synthetic smoke data
-- [x] Per-class threshold tuning — IMPLEMENTED AND VERIFIED
-- [x] Multi-label evaluation — IMPLEMENTED AND VERIFIED
-- [x] Relative-level grouped evaluation — IMPLEMENTED AND VERIFIED
-- [x] Overlap grouped evaluation — IMPLEMENTED AND VERIFIED
-- [x] Held-out-class rejection evaluation — IMPLEMENTED AND VERIFIED as a limited method
-- [x] File inference — IMPLEMENTED AND VERIFIED
-- [x] Overlapping streaming buffer — IMPLEMENTED AND VERIFIED
-- [x] Runtime benchmark — IMPLEMENTED AND VERIFIED
-- [x] Gradio UI — IMPLEMENTED AND BUILD-VERIFIED
-- [x] Continuous microphone adapter — IMPLEMENTED BUT ENVIRONMENT-DEPENDENT
-- [x] Unit/integration tests — IMPLEMENTED AND VERIFIED
-- [x] Synthetic demo data — IMPLEMENTED AND VERIFIED
-- [x] Synthetic demo CNN/CRNN checkpoints — IMPLEMENTED AND VERIFIED
-- [x] Multi-seed experiment runner — IMPLEMENTED; real data required for final execution
-- [x] Experiment mean/std aggregator — IMPLEMENTED
-- [x] README and technical docs — IMPLEMENTED
-- [ ] UrbanSound8K final CNN/CRNN training — NOT EXECUTED (dataset not provided in build environment)
-- [ ] Three-seed UrbanSound8K final metrics — NOT EXECUTED (depends on previous item)
-- [ ] Physical microphone test — IMPLEMENTED BUT ENVIRONMENT-DEPENDENT
-- [ ] Independently annotated real-world multi-label set — OPTIONAL / DATA-DEPENDENT
-- [ ] MFCC/ZCR/RMS classical comparison — OPTIONAL / NOT IMPLEMENTED
-- [ ] LSTM-vs-GRU experiment — OPTIONAL / NOT EXECUTED
-- [ ] advanced open-set recognition — OUT OF SCOPE
-- [ ] source separation/localization/counting — OUT OF SCOPE
+## User-local environment verification
 
-## Verified Build Facts
+- [x] Windows native Python 3.11.9 environment verified.
+- [x] RTX 3050 Ti Laptop GPU detected.
+- [x] PyTorch/torchaudio CUDA path verified.
+- [x] CPU fallback path verified.
+- [x] Gradio 6.29.1 verified.
+- [x] sounddevice 0.5.6 verified.
+- [x] Browser microphone verified.
+- [x] Physical `sounddevice` microphone capture verified.
+- [x] Fresh clone + fresh `.venv` installation verified.
+- [x] `python -m pip check` verified.
+- [x] Phase-16B full repository regression verified: `181 passed`.
 
-During repository construction:
+## Scientific implementation
 
-- editable installation succeeded offline with `--no-deps --no-build-isolation`,
-- all automated tests passed,
-- synthetic demo dataset generation succeeded,
-- CNN training smoke run succeeded,
-- CRNN training smoke run succeeded,
-- test evaluation succeeded for both demo models,
-- checkpoint file inference succeeded,
-- CRNN batch=1 runtime benchmark succeeded,
-- the Gradio `Blocks` interface constructed successfully.
+- [x] Final task definition: window-level multi-label audio tagging / event-presence detection.
+- [x] Frozen target/held-out classes.
+- [x] Leakage-safe UrbanSound8K fold/source protocol.
+- [x] Controlled two-source mixture generation.
+- [x] Shared Log-Mel feature extraction.
+- [x] CNN baseline.
+- [x] CRNN (CNN + unidirectional GRU).
+- [x] `BCEWithLogitsLoss`.
+- [x] Reproducible multi-seed training.
+- [x] Validation-mAP checkpoint selection.
+- [x] Validation-only per-class threshold selection.
+- [x] Frozen held-out known/OOD evaluation.
+- [x] Three-seed mean ± sample-standard-deviation aggregation.
+- [x] Relative-level and overlap breakdowns.
+- [x] Weak threshold-based held-out rejection analysis.
+- [x] Frozen scientific-result boundary documented.
 
-Actual environmental-sound performance is intentionally **not** claimed until UrbanSound8K is supplied and the frozen real-data experiment is run.
+## Final frozen result headline
+
+```text
+CNN:
+  mAP       0.618628 ± 0.008281
+  F1 micro  0.549715 ± 0.004061
+  F1 macro  0.564576 ± 0.003953
+
+CRNN:
+  mAP       0.727378 ± 0.007039
+  F1 micro  0.592859 ± 0.010359
+  F1 macro  0.617833 ± 0.013461
+```
+
+The CRNN is the stronger model family for the frozen known-class task. The threshold-only rejection heuristic remains weak and is **not** robust open-set recognition.
+
+## Frozen deployment / runtime
+
+Selected deployment:
+
+```text
+model = CRNN
+seed = 23
+selection = validation mAP only
+validation mAP = 0.6757137110147023
+```
+
+Canonical p95 compute:
+
+```text
+CPU  = 4.358 ms
+CUDA = 1.561 ms
+hop  = 1000 ms
+```
+
+Both measured paths satisfy the no-backlog engineering criterion on the verified laptop.
+
+## Engineering / delivery implementation
+
+- [x] File inference.
+- [x] Sequential overlapping file windows.
+- [x] Rolling streaming buffer.
+- [x] Browser microphone streaming.
+- [x] Local `sounddevice` microphone CLI.
+- [x] Gradio demonstration UI.
+- [x] Stop/history/clear lifecycle verification.
+- [x] Repository-level QA gate.
+- [x] GitHub Actions CI.
+- [x] Fresh-clone clean-install verifier.
+- [x] Final README and documentation index.
+- [x] Security/privacy and Git artifact policy.
+- [x] Public GitHub repository.
+
+## Optional / deliberately out of scope
+
+- [ ] Independently annotated real-world multi-label evaluation set — optional future validation.
+- [ ] MFCC/ZCR/RMS classical comparison — optional future baseline.
+- [ ] LSTM-vs-GRU scientific comparison — code path exists, not part of frozen matrix.
+- [ ] Advanced open-set/OOD method — future work.
+- [ ] Calibration study — future work.
+- [ ] Quantization/ONNX — future work.
+- [ ] Exact onset/offset SED — out of scope.
+- [ ] Source separation/counting/localization — out of scope.
+- [ ] Cloud/backend/database/authentication stack — intentionally not required.
+
+## Current next phase
+
+Phase 16C is a documentation/metadata consistency cleanup only. It does not reopen the frozen scientific protocol.
+
+Phase 16C local verification has passed (`8` documentation-contract tests, `181` full regression tests, and `git diff --check` exit code `0`). Phase 17 begins only after the Phase-16C commit is pushed and its hosted CI run is green.

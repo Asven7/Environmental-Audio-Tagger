@@ -2,79 +2,75 @@
 
 ## Status
 
-**IMPLEMENTED — WAITING FOR USER LOCAL VERIFICATION**
+**USER VERIFIED — PROTOCOL AND CPU/CUDA BENCHMARK COMPLETED**
+
+The authoritative measured values are in [`PHASE_12_RUNTIME_RESULTS.md`](PHASE_12_RUNTIME_RESULTS.md).
 
 ## Proposal contract
 
-The real-time design uses a two-second analysis window and a one-second hop. After the
-first complete window is available, the system should update once per hop. The compute
-time for a complete window must remain below the one-second hop so processing does not
-accumulate backlog.
+The real-time design uses:
+
+```text
+analysis window = 2.0 s
+stream hop = 1.0 s
+batch size = 1
+```
+
+After the first complete window is available, compute for one update must remain below the one-second hop so processing does not accumulate backlog.
 
 Runtime reporting separates:
 
 - compute time from an already available complete waveform window to final output;
-- update period (the one-second hop);
-- initial latency (at least the two-second window formation time plus compute);
-- Log-Mel feature extraction time;
+- update period;
+- initial latency caused by collecting the first window;
+- Log-Mel feature time;
 - model inference time.
 
-The target operating point is batch size one on an ordinary personal computer, not an
-industrial low-latency guarantee.
+The result is a hardware-specific engineering benchmark, not an industrial latency guarantee.
 
-## Audit of the pre-Phase-12 implementation
+## Pre-Phase-12 audit
 
-The repository already had a useful `AudioTagger` checkpoint/threshold inference path and
-a legacy runtime script. The old `scripts/benchmark_runtime.py` contained a hard-coded
-1000 ms stream-hop expression rather than deriving the hop from the checkpoint. The demo
-pipeline separately used `tagger.hop_seconds`, which is the correct source.
-
-Phase 12 therefore adds a canonical frozen runtime protocol rather than using the legacy
-script for final runtime claims.
+The repository already had `AudioTagger` inference and a legacy runtime script. Phase 12 established the canonical frozen runtime path and required the hop to come from the frozen checkpoint/configuration rather than a hard-coded timing assumption.
 
 ## Deployment-run selection
 
-Runtime/demo work needs one concrete CRNN artifact.
+Runtime/demo work requires one concrete CRNN artifact.
 
-The deployment seed is selected using **validation performance only**:
+Selection rule:
 
 ```text
-model family: CRNN
-criterion: highest best_validation_mAP in training_index.json
-tie break: lower seed
-eligible seeds: 13, 23, 37
+model family = CRNN
+criterion = highest best_validation_mAP
+eligible seeds = 13, 23, 37
+tie break = lower seed
 ```
 
-For the completed Phase-11 experiment this selects:
+Completed selection:
 
 ```text
 CRNN seed 23
-best validation mAP = 0.675714...
+best validation mAP = 0.6757137110147023
 ```
 
-No held-out test metric is read by the deployment selector. The selected checkpoint and
-threshold file must still match their SHA-256 values in `experiment_freeze.json`.
+No held-out test metric is read by the deployment selector.
 
-This choice does not change Phase-11 results and does not retune the model.
+The selected checkpoint/threshold artifacts must match the hashes in `experiment_freeze.json`.
 
 ## Canonical runtime measurement
 
-`scripts/benchmark_frozen_runtime.py` uses batch size one and reports two timing views.
+`scripts/benchmark_frozen_runtime.py` uses batch size one and reports two views.
 
 ### Canonical total compute
 
-The primary real-time number times the public:
+Primary path:
 
 ```text
 AudioTagger.predict_waveform(...)
 ```
 
-path.
+CUDA is synchronized around the timed call.
 
-CUDA is synchronized before and after the timed call so GPU kernels are not accidentally
-reported as asynchronous near-zero host time.
-
-This `canonical_total.p95_ms` is used for the real-time no-backlog criterion:
+No-backlog criterion:
 
 ```text
 canonical_total.p95_ms < hop_seconds * 1000
@@ -82,7 +78,7 @@ canonical_total.p95_ms < hop_seconds * 1000
 
 ### Stage breakdown
 
-An equivalent staged path reports:
+Equivalent staged timing reports:
 
 ```text
 preprocess
@@ -93,13 +89,9 @@ postprocess
 staged_total
 ```
 
-Before benchmarking, its class-score vector must match the canonical AudioTagger output
-within a small numeric tolerance.
+Its score vector must match the canonical output within numeric tolerance before benchmarking.
 
 ## Timed-region boundary
-
-The timed compute region begins when a complete mono waveform is already available in
-host memory.
 
 Included:
 
@@ -115,25 +107,19 @@ sigmoid / CPU score transfer / threshold decision
 Excluded:
 
 ```text
-microphone capture time
+microphone capture
 disk I/O
 audio-file decode
-resampling used only to obtain the representative benchmark waveform
+representative-input resampling outside the timed region
 ```
-
-Those exclusions are intentional. Microphone capture contributes to the initial
-window-formation latency, while disk I/O is not part of live microphone inference.
 
 ## Representative input
 
-The benchmark script deterministically takes the first single-event item from
-`known_val.csv`, loads/resamples it once, and then performs timed iterations on that
-in-memory waveform.
+The benchmark deterministically uses a known validation single-event sample only as an in-memory representative waveform.
 
-Validation data are used only as a representative signal shape/content source; runtime
-measurement does not calculate labels, accuracy, F1, mAP, or any held-out test metric.
+No labels, accuracy, F1, mAP, or held-out test metric are calculated by runtime measurement.
 
-## Reported values
+## Reported statistics
 
 For each timing category:
 
@@ -148,10 +134,10 @@ p99
 max
 ```
 
-The report also stores:
+Report metadata includes:
 
 ```text
-batch_size = 1
+batch_size
 window_ms
 stream_hop_ms
 p95_compute_to_hop_ratio
@@ -165,37 +151,32 @@ hardware/software environment
 representative input provenance
 ```
 
-## CPU and CUDA
-
-The official local verification should benchmark both:
+## Official verification protocol
 
 ```text
-CPU
-CUDA
+CPU and CUDA
+10 warm-up iterations
+100 measured iterations
+batch size 1
+primary statistic = p95 total compute
 ```
 
-The project must retain a CPU inference path. CUDA is an acceleration path, not a
-requirement for scientific correctness.
-
-Runtime numbers are hardware-specific and should always be reported together with the
-machine/device information.
-
-## Warm-up and sample count
-
-Official Phase-12 local benchmark:
+## Verified result
 
 ```text
-warm-up iterations: 10
-measured iterations: 100
-batch size: 1
-primary statistic: p95 total compute
+CPU canonical p95  = 4.358 ms
+CUDA canonical p95 = 1.561 ms
+hop                 = 1000 ms
+
+CPU  no-backlog = PASS
+CUDA no-backlog = PASS
 ```
 
-Do not infer runtime performance from training duration.
+Initial prediction latency remains approximately two seconds plus compute time because the first analysis window must first be collected.
 
 ## Scientific boundary
 
-Phase 12 does not:
+Phase 12 did not:
 
 - retrain;
 - retune thresholds;
@@ -203,4 +184,4 @@ Phase 12 does not:
 - choose a seed using held-out test performance;
 - alter Phase-11 frozen results.
 
-It only verifies the frozen inference path and measures engineering latency.
+It measures engineering latency of the already frozen deployment.

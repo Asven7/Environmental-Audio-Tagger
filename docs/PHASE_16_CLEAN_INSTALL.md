@@ -2,18 +2,21 @@
 
 ## Status
 
-**USER VERIFIED — FRESH CLONE / FRESH VENV ACCEPTANCE PASSED**
+**16A USER VERIFIED — FRESH CLONE / FRESH VENV ACCEPTANCE PASSED**
+
+Phase 16B was also subsequently user verified, committed, pushed, and CI verified. Phase 16C is a documentation/metadata consistency cleanup and does not change the clean-install result.
 
 ## Scope
 
-Phase 16 was intentionally split into:
+Phase 16 was split into:
 
 ```text
 16A — fresh-clone / fresh-venv installation verification
 16B — final README + user-facing documentation consolidation
+16C — final repository documentation/metadata consistency cleanup
 ```
 
-Phase 16A was verified before final documentation consolidation so that the published installation instructions are based on a real clean-environment run.
+Phase 16A was verified before final documentation consolidation so the installation instructions are based on a real clean-environment run.
 
 ## Phase 16A implementation
 
@@ -52,7 +55,7 @@ held-out scientific evaluation
 
 ## Development-checkout verification
 
-Before the clean clone:
+Before the fresh clone:
 
 ```text
 clean-install contract tests: 7 passed
@@ -60,7 +63,7 @@ full repository suite: 173 passed
 verify_clean_install.py: PASS
 ```
 
-The verifier reported:
+Verifier environment:
 
 ```text
 Python 3.11.9
@@ -74,18 +77,18 @@ CRNN synthetic CPU forward: PASS
 
 ## Fresh-clone acceptance
 
-The project was then cloned into a separate directory and installed into a new `.venv`.
+The project was cloned to a separate directory and installed into a new `.venv`.
 
-The fresh environment used:
+Verified path:
 
 ```text
 Windows
 Python 3.11.9
-CPU PyTorch installation path
+CPU PyTorch
 non-editable python -m pip install ".[all]"
 ```
 
-User-reported final acceptance:
+Final acceptance:
 
 ```text
 python -m pip check
@@ -102,12 +105,56 @@ git status
   -> nothing to commit, working tree clean
 ```
 
-The acceptance explicitly confirmed:
+Explicit verifier boundary:
 
 ```text
 UrbanSound8K was NOT required.
 Frozen experiment artifacts were NOT required.
 Held-out scientific metrics were NOT recomputed.
+```
+
+## Phase 16B
+
+Final documentation consolidation updated:
+
+```text
+README.md
+docs/README.md
+docs/PHASE_16_CLEAN_INSTALL.md
+docs/PHASE_16_COMPLETION.md
+tests/test_final_documentation_contract.py
+```
+
+User-local verification:
+
+```text
+documentation contract: 8 passed
+full pytest: 181 passed
+git diff --check: PASS
+```
+
+Milestone:
+
+```text
+539418a docs: finalize project documentation and clean-install record
+```
+
+The commit was pushed to `main` and GitHub Actions completed successfully.
+
+## Phase 16C
+
+A repository-wide audit found stale status/history inconsistencies in older user-facing documents. Phase 16C updates only documentation, metadata convenience files, and documentation contract assertions.
+
+It does **not** change:
+
+```text
+scientific config
+model code
+checkpoints
+thresholds
+frozen held-out results
+runtime results
+deployment selection
 ```
 
 ## Scientific boundary
@@ -119,22 +166,8 @@ retrain a model
 retune thresholds
 modify frozen checkpoints
 change preprocessing
-reselect the deployment seed
+reselect deployment using held-out results
 recompute held-out accuracy/F1/mAP
 ```
 
-The clean-install check is an engineering reproducibility result, not a new scientific experiment.
-
-## Phase 16B
-
-Final documentation consolidation updates:
-
-```text
-README.md
-docs/README.md
-docs/PHASE_16_COMPLETION.md
-```
-
-and adds a documentation contract test to guard the final README's scientific boundary and verified headline results.
-
-Phase 16 is complete only after the Phase-16B documentation tests and full regression suite pass and the documentation commit is cleanly recorded.
+Clean-install and documentation verification are engineering reproducibility work, not new scientific experiments.

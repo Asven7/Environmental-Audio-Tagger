@@ -1,6 +1,6 @@
 # Local Setup Guide
 
-This guide targets the primary development machine currently used for the project:
+This guide targets the verified primary development machine:
 
 - Windows 10 Enterprise 64-bit
 - Python 3.11.9
@@ -9,168 +9,199 @@ This guide targets the primary development machine currently used for the projec
 - NVIDIA GeForce RTX 3050 Ti Laptop GPU with 4 GB VRAM
 - Git for Windows
 
-The project does **not** require Node.js, Java, Docker, a database server, or a separately installed CUDA Toolkit for normal PyTorch development.
+The project does **not** require Node.js, Java, Docker, a database server, or a separately installed CUDA Toolkit for normal local use.
 
-## 1. Important Python Path Check
+For a fresh reproducibility install, prefer [`CLEAN_INSTALL.md`](CLEAN_INSTALL.md). This document focuses on an editable developer checkout.
 
-Before creating the virtual environment, confirm which Python executable is actually being launched:
+## 1. Check the Python executable
 
 ```powershell
 python -c "import sys; print(sys.executable); print(sys.version)"
 ```
 
-A normal native Windows CPython installation is preferred. If the path resolves to `C:\msys64\...`, stop before installing PyTorch and use a native Windows Python 3.11 installation instead.
+Use a native Windows CPython installation. If the path resolves to `C:\msys64\...`, use native Windows Python 3.11 instead.
 
-## 2. Create the Virtual Environment
-
-Run these commands from the repository root:
+## 2. Create and activate `.venv`
 
 ```powershell
 python -m venv .venv
-```
-
-Activate it:
-
-```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-Verify activation:
+Verify:
 
 ```powershell
 python -c "import sys; print(sys.executable)"
 ```
 
-The path should point inside the repository's `.venv` directory.
-
-If PowerShell blocks activation, use the temporary per-process policy:
+If PowerShell blocks activation:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
 ```
 
-This does not permanently change the machine-wide execution policy.
-
-## 3. Upgrade Packaging Tools
+## 3. Upgrade packaging tools
 
 ```powershell
 python -m pip install --upgrade pip setuptools wheel
 ```
 
-Verify:
+## 4. Choose PyTorch CPU or CUDA
+
+### Verified CUDA path
+
+The development laptop was verified with PyTorch 2.10.0 / torchaudio 2.10.0 using the CUDA 12.6 wheels:
 
 ```powershell
-python -m pip --version
+python -m pip install `
+  --index-url https://download.pytorch.org/whl/cu126 `
+  "torch>=2.6,<2.11" `
+  "torchaudio>=2.6,<2.11"
 ```
 
-## 4. Install PyTorch for the RTX 3050 Ti
-
-The repository was previously verified with PyTorch 2.10.0 and torchaudio 2.10.0. To minimize moving parts during the undergraduate project, the Windows GPU setup uses the official CUDA 12.6 wheels for the same versions.
-
-```powershell
-python -m pip install torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu126
-```
-
-A separate CUDA Toolkit installation is not required for this prebuilt-wheel workflow. The NVIDIA display driver still needs to be compatible, which is checked using `nvidia-smi`.
+A separate CUDA Toolkit installation is not required for this prebuilt-wheel workflow.
 
 ### CPU fallback
 
-If GPU installation or CUDA initialization is problematic, use the CPU build instead:
-
 ```powershell
 python -m pip uninstall -y torch torchaudio
-python -m pip install torch==2.10.0 torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+
+python -m pip install `
+  --index-url https://download.pytorch.org/whl/cpu `
+  "torch>=2.6,<2.11" `
+  "torchaudio>=2.6,<2.11"
 ```
 
-The project remains functional on CPU; training will simply be slower.
+CPU inference is a fully supported path and was independently verified against the real-time no-backlog criterion.
 
-## 5. Install the Project and Development Dependencies
+## 5. Install the complete developer/demo environment
 
-For the current phase, install the core project plus testing tools. The UI and live microphone dependencies are intentionally deferred until their dedicated phase.
+For an editable developer checkout:
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[all]"
 ```
 
-Check dependency consistency:
+The `all` extra includes:
+
+```text
+Gradio
+sounddevice
+pytest
+```
+
+Then:
 
 ```powershell
 python -m pip check
 ```
 
-## 6. Verify the Environment
-
-Run the standard-library environment checker:
+For a clean, non-editable reproducibility install, use:
 
 ```powershell
-python scripts/check_environment.py
+python -m pip install ".[all]"
 ```
 
-Then verify PyTorch directly:
+and follow [`CLEAN_INSTALL.md`](CLEAN_INSTALL.md).
+
+## 6. Verify installed versions
+
+Use distribution metadata instead of package-specific `.version` attributes:
+
+```powershell
+python -c "from importlib.metadata import version; print('gradio=', version('gradio')); print('sounddevice=', version('sounddevice')); print('pytest=', version('pytest'))"
+```
+
+The verified development environment used:
+
+```text
+Python 3.11.9
+Gradio 6.29.1
+sounddevice 0.5.6
+pytest 9.1.1
+```
+
+## 7. Verify PyTorch and CUDA
 
 ```powershell
 python -c "import torch; print('torch=', torch.__version__); print('torch_cuda_runtime=', torch.version.cuda); print('cuda_available=', torch.cuda.is_available()); print('device=', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU')"
 ```
 
-If CUDA is available, also perform a small real GPU operation:
+If CUDA is available:
 
 ```powershell
 python -c "import torch; x=torch.randn((1024,1024), device='cuda'); y=x@x; torch.cuda.synchronize(); print('GPU smoke test:', y.shape, 'PASS')"
 ```
 
-## 7. Run the Existing Test Suite
-
-Only after editable installation:
+## 8. Run environment and repository checks
 
 ```powershell
+python scripts\check_environment.py
+python -m pip check
 python -m pytest
 ```
 
-Expected baseline: all existing tests should pass. The exact count may increase as the project evolves.
+The Phase-16B verified repository baseline was:
 
-On the target Windows machine, pytest's default user-temp directory produced an ACL `PermissionError`. The repository therefore configures a project-local temporary directory (`.pytest_tmp/`) through `pyproject.toml`. No extra test flag should be required.
+```text
+181 passed
+```
 
-## 8. Resource Monitoring
+The exact count may increase if later phases add tests; a clean all-pass run is the requirement.
 
-GPU state and VRAM:
+The repository configures pytest to use `.pytest_tmp/` because the target Windows machine encountered an ACL `PermissionError` in the user temp directory.
+
+## 9. Optional UI and microphone checks
+
+```powershell
+python scripts\run_ui.py --help
+python scripts\live_microphone.py --help
+python scripts\live_microphone.py --list-devices
+```
+
+The browser microphone and physical `sounddevice` microphone paths were both verified in Phase 13.
+
+## 10. Resource monitoring
 
 ```powershell
 nvidia-smi
-```
-
-Live refresh every two seconds:
-
-```powershell
 nvidia-smi -l 2
 ```
 
-The current machine reports 4096 MiB total GPU memory, so later training phases will use a lightweight model and conservative batch sizes. CPU execution remains the fallback.
+The development GPU has 4096 MiB VRAM, so the project intentionally uses lightweight models and retains CPU fallback.
 
-## 9. What Not to Install
+## 11. What not to install
 
-Do not install these unless a later phase explicitly requires them:
+Do not add these unless a newly declared future scope requires them:
 
-- standalone CUDA Toolkit;
-- cuDNN separately;
-- Node.js/npm;
-- Java;
-- Docker Desktop;
-- PostgreSQL/MySQL/MongoDB;
+- standalone CUDA Toolkit,
+- cuDNN separately,
+- Node.js/npm,
+- Java,
+- Docker Desktop,
+- PostgreSQL/MySQL/MongoDB,
 - WSL solely for this project.
 
-Keeping the environment small reduces dependency and debugging risk.
-
-## 10. Clean Rebuild of the Virtual Environment
-
-If the environment becomes inconsistent:
+## 12. Clean rebuild
 
 ```powershell
-Deactivate
+deactivate
 Remove-Item -Recurse -Force .venv
+
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip setuptools wheel
 ```
 
-Then repeat the PyTorch and editable project installation steps above.
+Then install the appropriate PyTorch build and rerun:
+
+```powershell
+python -m pip install -e ".[all]"
+python -m pip check
+python -m pytest
+```
+
+## Scientific boundary
+
+Environment repair must not be used as a reason to change the frozen checkpoint, thresholds, preprocessing, split, or scientific results.

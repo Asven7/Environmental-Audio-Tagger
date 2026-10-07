@@ -2,11 +2,9 @@
 
 ## Status
 
-**IMPLEMENTED — WAITING FOR USER LOCAL VERIFICATION**
+**USER VERIFIED — FROZEN SIX-RUN AGGREGATION COMPLETED**
 
-This step aggregates the six already-generated frozen evaluation artifacts. It performs
-no inference, no threshold tuning, no model selection, and no change to the Phase-10
-evaluation definitions.
+This step aggregates the six frozen evaluation artifacts. It performs no inference, threshold tuning, model selection, or change to the Phase-10 evaluation definitions.
 
 ## Frozen input matrix
 
@@ -15,11 +13,11 @@ CNN  × seeds 13, 23, 37
 CRNN × seeds 13, 23, 37
 ```
 
-The aggregator requires all six runs.
+All six runs are required.
 
-## Integrity checks before aggregation
+## Integrity checks
 
-For every run it verifies:
+For every run the aggregator verifies:
 
 ```text
 checkpoint SHA-256 against experiment_freeze.json
@@ -50,7 +48,7 @@ minimum
 maximum
 ```
 
-No best-seed selection is performed.
+No best-seed substitution is performed.
 
 ## Headline known-test metrics
 
@@ -88,6 +86,8 @@ joint relative-dB × overlap groups
 
 ## Outputs
 
+Git-ignored experiment outputs:
+
 ```text
 frozen_test_summary.json
 frozen_test_headline.csv
@@ -95,15 +95,27 @@ frozen_test_per_class.csv
 frozen_test_groups.csv
 ```
 
-All outputs live under the already Git-ignored experiment artifact directory.
+## Verified final headline
+
+```text
+CNN:
+  mAP       0.618628 ± 0.008281
+  F1 micro  0.549715 ± 0.004061
+  F1 macro  0.564576 ± 0.003953
+
+CRNN:
+  mAP       0.727378 ± 0.007039
+  F1 micro  0.592859 ± 0.010359
+  F1 macro  0.617833 ± 0.013461
+```
+
+The full final interpretation is recorded in [`PHASE_11_FINAL_RESULTS.md`](PHASE_11_FINAL_RESULTS.md).
 
 ## Scientific interpretation
 
-These are final held-out results for the frozen protocol. They must be reported across
-all three predeclared seeds. Individual seed results may be inspected diagnostically, but
-must not replace the multi-seed mean ± standard deviation as the primary result.
+These are final held-out results for the frozen protocol and must be reported across all three predeclared seeds.
 
-After these results exist:
+After observing them:
 
 ```text
 no threshold retuning
@@ -112,6 +124,4 @@ no preprocessing change based on held-out performance
 no metric-definition change based on held-out performance
 ```
 
-Any new development cycle after inspecting held-out results would require a newly
-declared evaluation protocol and should not be described as the same untouched final
-test.
+Any later scientific development requires a newly declared evaluation protocol.

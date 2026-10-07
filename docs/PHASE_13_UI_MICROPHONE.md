@@ -2,23 +2,20 @@
 
 ## Status
 
-**USER VERIFIED — READY TO COMMIT**
+**USER VERIFIED — COMMITTED**
 
 ## Scope
 
-Phase 13B connects the Phase-13A streaming core to two demo interfaces:
+Phase 13B connects the tested Phase-13A core to:
 
 ```text
 1. Gradio file + browser-microphone UI
 2. local sounddevice microphone CLI
 ```
 
-Neither path changes the frozen CRNN, thresholds, feature configuration, 2-second window,
-or 1-second hop.
+Neither path changes the frozen CRNN, thresholds, feature configuration, 2-second window, or 1-second hop.
 
 ## Verified local environment
-
-User-local verification was completed on Windows with:
 
 ```text
 Python 3.11.9
@@ -27,7 +24,7 @@ sounddevice 0.5.6
 CPU inference path
 ```
 
-The project optional dependencies already define the UI/live packages in `pyproject.toml`:
+Optional dependencies:
 
 ```text
 ui   -> gradio>=5,<7
@@ -37,13 +34,13 @@ all  -> UI + live + dev dependencies
 
 ## Gradio UI
 
-`scripts/run_ui.py` provides the File, Microphone, and Interpretation tabs.
+`scripts/run_ui.py` provides File, Microphone, and Interpretation surfaces.
 
 ### File
 
-The complete audio file is analyzed as sequential overlapping windows.
+The complete file is analyzed as sequential overlapping windows.
 
-Each row contains:
+Each row includes:
 
 ```text
 window index
@@ -57,9 +54,7 @@ processing time
 one score column per target class
 ```
 
-This is the proposal's window-level file demo rather than a one-file/one-window shortcut.
-
-User-local verification confirmed a 2.527 s UrbanSound8K example produced three windows:
+A verified 2.527 s example produced nominal windows:
 
 ```text
 0.0 -> 2.0 s
@@ -67,24 +62,20 @@ User-local verification confirmed a 2.527 s UrbanSound8K example produced three 
 2.0 -> 4.0 s
 ```
 
-with right padding on the final two nominal windows as expected.
+with expected right padding near the end.
 
 ### Microphone
 
-The Gradio `Audio` component uses browser microphone capture and streaming events.
-
-The adapter:
+Browser microphone chunks are:
 
 ```text
-downmixes to mono
-converts integer PCM to float32 [-1, 1]
-resamples to the checkpoint sample rate when necessary
-maintains cumulative sample counts
-feeds the Phase-13A rolling buffer
+downmixed to mono
+converted to float32
+resampled when required
+fed into the rolling target-rate buffer
 ```
 
-No prediction is produced until the first complete two-second target-rate window exists.
-After that, predictions follow the frozen one-second hop.
+No prediction is produced before the first complete 2-second window. Later predictions follow the 1-second hop.
 
 The UI shows:
 
@@ -95,97 +86,64 @@ latest processing time
 per-class score
 per-class frozen threshold
 per-class active flag
-complete timestamped live-window history for the current recording session
+complete timestamped live-window history
 ```
 
-`No confident known class` is intentionally used instead of claiming generic unknown
-recognition.
+`No confident known class` remains a threshold heuristic, not an unknown detector.
 
-## Microphone session lifecycle
+## Session lifecycle
 
-Starting a new recording creates a fresh session state.
-
-Stopping recording:
+Stop:
 
 ```text
-marks the backend session as stopped
-updates the visible status
-preserves the score table
-preserves the complete live-window history
+marks session stopped
+preserves latest scores
+preserves complete live history
 ```
 
-The final verified stop message is:
+Verified message:
 
 ```text
 Recording stopped. Results preserved.
 ```
 
-Results are cleared only through the explicit `Clear results` control.
+Only `Clear results` removes the visible results/history.
 
-### History ordering
-
-The UI provides a dedicated server-side `History order` control:
+History ordering:
 
 ```text
 Newest first
 Oldest first
 ```
 
-This avoids depending on transient browser-side Dataframe column sorting while streaming
-updates are still arriving.
-
-User-local verification confirmed both orderings remain usable and that stopping a recording
-does not remove the current session history.
+was user verified.
 
 ## sounddevice CLI
 
-`scripts/live_microphone.py` is the local sounddevice implementation and uses
-`StreamingInferenceEngine`.
+`scripts/live_microphone.py` uses `StreamingInferenceEngine`.
 
-Audio capture runs in PortAudio's callback while model inference runs on the main Python
-thread. The callback copies chunks into a bounded queue rather than running PyTorch inside
-the real-time audio callback.
+Capture occurs in the PortAudio callback while model inference stays on the main Python thread; chunks are copied through a bounded queue.
 
-The verified default microphone path used:
+Verified input:
 
 ```text
 Microphone (C-Media(R) Audio), MME
+22050 Hz
+1 channel
+float32
 ```
 
-The InputStream successfully operated at the frozen checkpoint sample rate:
-
-```text
-sample rate = 22050 Hz
-channels = 1
-dtype = float32
-```
-
-User-local verification produced sequential predictions with:
-
-```text
-2.0 s analysis window
-1.0 s hop
-window indices 0, 1, 2, ...
-clean Ctrl+C shutdown
-```
-
-and ended with:
-
-```text
-Microphone capture stopped.
-```
+Sequential windows and clean `Ctrl+C` shutdown were verified.
 
 ## Deployment artifact
 
-By default both demo paths resolve the frozen CRNN deployment run from:
+Default demo paths resolve the frozen deployment from:
 
 ```text
 artifacts/experiments_phase11
 ```
 
-using the Phase-12 validation-only deployment-selection rule.
-
-The verified deployment was:
+Verified deployment:
 
 ```text
 model = CRNN
@@ -193,53 +151,39 @@ seed = 23
 validation mAP = 0.675714
 ```
 
-Explicit `--checkpoint` and `--thresholds` remain available together for debugging and
-backward compatibility.
+Explicit `--checkpoint` + `--thresholds` remain available together.
 
-Default runtime device policy:
+Default device policy:
 
 ```text
 auto -> CUDA when available, otherwise CPU
 ```
 
-CPU remains a fully supported path and was explicitly verified for this phase.
+CPU remains fully supported.
 
-## Optional dependencies
+## Installation
 
-The dependencies are already declared in `pyproject.toml`.
-
-Recommended project installation forms are:
-
-```powershell
-python -m pip install -e ".[ui]"
-python -m pip install -e ".[live]"
-```
-
-or for the complete development/demo environment:
+Developer checkout:
 
 ```powershell
 python -m pip install -e ".[all]"
 ```
 
-To inspect installed versions without relying on package-specific version attributes:
+Clean/non-editable installation:
+
+```powershell
+python -m pip install ".[all]"
+```
+
+Version inspection:
 
 ```powershell
 python -c "from importlib.metadata import version; print('gradio=', version('gradio')); print('sounddevice=', version('sounddevice'))"
 ```
 
-## Verified automated tests
+## Live/OOD limitation
 
-During Phase 13B, the user locally verified the dedicated UI/streaming tests and repeated
-full-project regression tests after the UI lifecycle fixes.
-
-The final regression suite passed completely before this documentation-only update.
-
-## Live / OOD limitation observed during verification
-
-Live microphone verification exposed an important deployment limitation.
-
-In a quiet environment with laptop-fan/background sound, the frozen model frequently
-activated known classes such as:
+Quiet-room / laptop-fan audio produced false positives such as:
 
 ```text
 siren
@@ -247,36 +191,30 @@ air_conditioner
 jackhammer
 ```
 
-This is consistent with the already-frozen evaluation result showing weak rejection of
-out-of-distribution audio. Therefore:
+This is consistent with the frozen weak OOD rejection result.
+
+Correct interpretation:
 
 ```text
-the live microphone pipeline is functioning
-the observed false positives are a model/rejection limitation
-the UI must not present this as robust unknown/open-set recognition
+live pipeline works
+false positives expose a model/rejection limitation
+no threshold/model changes were made after held-out evaluation
 ```
-
-No thresholds, model weights, feature parameters, or frozen evaluation artifacts were
-changed in response to this observation.
-
-This limitation must be retained in the final report and defense discussion.
 
 ## Scientific boundary
 
-Phase 13B does not:
+Phase 13B did not:
 
 ```text
 retrain
 retune thresholds
-read held-out test labels for development
-recompute accuracy/F1/mAP
-smooth scores across windows
-change the frozen scientific result
+read held-out labels for development
+recompute held-out metrics
+add smoothing
+change frozen scientific results
 ```
 
-The UI is a demonstration/deployment layer over the frozen inference system.
-
-## Phase checkpoint
+## Final checkpoint
 
 ```text
 File UI                  USER VERIFIED
@@ -287,6 +225,5 @@ Stop / Clear lifecycle   USER VERIFIED
 sounddevice device list  USER VERIFIED
 sounddevice live capture USER VERIFIED
 CPU live inference       USER VERIFIED
+commit                   COMPLETED
 ```
-
-**Phase 13B is functionally complete and ready for Git commit.**

@@ -2,9 +2,9 @@
 
 ## Status
 
-**IMPLEMENTED — WAITING FOR USER LOCAL VERIFICATION OF THE EXPERIMENT PROTOCOL**
+**USER VERIFIED — OFFICIAL SIX-RUN EXPERIMENT COMPLETED AND FROZEN**
 
-Phase 11 is the first scientific experiment campaign. The official matrix is frozen as:
+The official matrix was frozen as:
 
 ```text
 CNN  × seeds 13, 23, 37
@@ -12,13 +12,13 @@ CRNN × seeds 13, 23, 37
 = 6 training runs
 ```
 
-The held-out known-test and OOD-test sets remain locked until all six training runs and
-all six validation-selected threshold artifacts have been completed and frozen.
+All six runs, validation-only threshold selections, the pre-test freeze, frozen held-out evaluations, and final aggregation were completed.
+
+The authoritative final scientific results are in [`PHASE_11_FINAL_RESULTS.md`](PHASE_11_FINAL_RESULTS.md).
 
 ## Why a dedicated official runner exists
 
-The generic Phase-9 runner is safe for train/validation experimentation, but Phase 11
-needs stronger safeguards around the final scientific campaign:
+The generic Phase-9 runner is safe for train/validation experimentation, but Phase 11 required stronger safeguards around the final scientific campaign:
 
 - exact six-run matrix;
 - clean Git requirement;
@@ -27,16 +27,14 @@ needs stronger safeguards around the final scientific campaign:
 - Git-ignored artifact root;
 - resumable completed runs without silently overwriting them;
 - incremental training index after each completed run;
-- threshold selection only after all six training runs are complete;
+- threshold selection only after all six training runs were complete;
 - a pre-test freeze artifact.
 
-## Protocol-lock commit
+## Protocol-lock requirement
 
 The official training runner refuses to start with a dirty Git working tree.
 
-Therefore the Phase-11 code itself must be tested and committed before the six scientific
-training runs are launched. This is intentional: the exact code revision is part of the
-experiment plan.
+This makes the exact code revision part of the experiment plan and prevents scientific training from silently running against uncommitted protocol changes.
 
 ## Official training artifacts
 
@@ -60,7 +58,7 @@ device
 run matrix
 ```
 
-Each run directory contains the normal Phase-9 artifacts, including:
+Each run directory contains:
 
 ```text
 best_model.pt
@@ -70,80 +68,100 @@ training_summary.json
 
 No threshold tuning occurs during training.
 
-`training_index.json` is updated after every completed run, so a later failure does not
-erase the record of earlier completed runs.
+`training_index.json` is updated after each completed run.
 
 ## Resume behavior
 
-`--resume` skips only runs that have both a checkpoint and training summary and whose
-model/seed/manifest hashes satisfy the frozen plan.
+`--resume` skips only runs that have both a checkpoint and training summary and whose model/seed/manifest hashes satisfy the frozen plan.
 
-A partially written run directory is not guessed or silently overwritten. The runner
-fails and asks for inspection/removal of only that incomplete generated run directory.
+A partially written run directory is not guessed or silently overwritten.
 
-## Threshold pass
+## Validation-only threshold pass
 
-After all six training runs complete:
+After all six training runs completed:
 
 ```text
 scripts/select_experiment_thresholds.py
 ```
 
-selects one validation-only threshold vector for every checkpoint using the Phase-10
-protocol.
+selected one threshold vector per checkpoint from validation data only.
 
-For each run it writes:
+Per run:
 
 ```text
 thresholds.json
 threshold_selection.json
 ```
 
-and the matrix-level:
+Matrix-level:
 
 ```text
 threshold_index.json
 experiment_freeze.json
 ```
 
-The freeze artifact records the hashes of all six checkpoints and all six threshold
-artifacts. Once this artifact exists, the pre-test model/threshold matrix is considered
-frozen.
+The freeze artifact records hashes of all six checkpoints and all six threshold artifacts.
 
 ## Validation-only aggregation
 
-`scripts/summarize_validation_experiments.py` reports mean, sample standard deviation,
-minimum, and maximum across the three seeds for each model for:
+`scripts/summarize_validation_experiments.py` reports across the three seeds per model:
 
 ```text
 best validation mAP
 best epoch
 epochs run
 training elapsed seconds
-validation F1 micro after validation threshold selection
-validation F1 macro after validation threshold selection
+validation F1 micro
+validation F1 macro
 per-class selected thresholds
 ```
 
-These are development/validation statistics, not final held-out performance.
+These are validation/development statistics, not held-out test performance.
+
+## Completed validation results
+
+Validation-only mean ± sample standard deviation:
+
+```text
+CNN:
+  mAP       0.615137 ± 0.008819
+  F1 micro  0.572758 ± 0.005473
+  F1 macro  0.598761 ± 0.008029
+
+CRNN:
+  mAP       0.669377 ± 0.006753
+  F1 micro  0.592500 ± 0.013290
+  F1 macro  0.629206 ± 0.010054
+```
+
+CRNN seed 23 achieved the highest CRNN validation mAP and was later selected for deployment using validation information only.
 
 ## Held-out boundary
 
-Phase-11 training, threshold selection, and validation aggregation contain no call to the
-held-out evaluator and no reference to known-test or OOD-test manifests.
+Training, threshold selection, and validation aggregation do not use the known-test or OOD-test sets for development.
 
-The final held-out pass must use the already frozen Phase-10 evaluation workflow only
-after `experiment_freeze.json` exists.
+Only after `experiment_freeze.json` existed was the frozen Phase-10 held-out evaluation workflow used.
 
-## Verification before scientific training
+## Frozen scientific result
 
-Run:
+Final three-seed held-out headline:
 
-```powershell
-python -m pytest tests/test_experiment_protocol.py -v
-python -m pytest
-git check-ignore -v artifacts/experiments_phase11
+```text
+CNN mAP  = 0.618628 ± 0.008281
+CRNN mAP = 0.727378 ± 0.007039
 ```
 
-Do not start the six training runs until these checks pass and the Phase-11 protocol code
-has been committed to Git.
+The held-out result is final for this protocol.
+
+No post-test:
+
+```text
+threshold retuning
+architecture change
+preprocessing change
+split/class change
+metric-definition change
+best-seed substitution
+```
+
+is permitted while claiming the same untouched final test protocol.

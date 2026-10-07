@@ -2,9 +2,9 @@
 
 ## Status
 
-**IMPLEMENTED — WAITING FOR USER LOCAL VERIFICATION OF 16B**
+**16A/16B/16C USER VERIFIED**
 
-Phase 16A is already **USER VERIFIED** through a fresh clone and fresh virtual environment.
+Phase 16A and 16B are complete. Phase 16C is the final consistency cleanup identified by a repository-wide audit before entering Phase 17.
 
 ## Verified Phase 16A evidence
 
@@ -20,30 +20,49 @@ working tree: clean
 
 The clean-install verifier required neither UrbanSound8K nor frozen Phase-11 research artifacts and did not recompute held-out scientific metrics.
 
-## Phase 16B documentation consolidation
+## Verified Phase 16B evidence
 
-The final user-facing documentation is consolidated around:
+Documentation consolidation covered:
 
 ```text
 README.md
 docs/README.md
 docs/CLEAN_INSTALL.md
+docs/PHASE_16_COMPLETION.md
+tests/test_final_documentation_contract.py
 ```
 
-The top-level README now distinguishes:
+Local acceptance:
 
 ```text
-scientific scope vs full SED
-frozen research results vs synthetic demo outputs
-validation-only selection vs held-out evaluation
-weak held-out rejection vs general open-set recognition
-canonical runtime vs initial window collection latency
-public-repository installability vs local frozen experiment artifacts
+documentation contract: 8 passed
+full pytest: 181 passed
+git diff --check: PASS
+working tree after commit: clean
 ```
 
-It also records the verified clean-install procedure and links the phase-specific evidence.
+Commit:
 
-## Frozen research headline
+```text
+539418a docs: finalize project documentation and clean-install record
+```
+
+Push:
+
+```text
+main -> origin/main
+```
+
+GitHub Actions:
+
+```text
+workflow = CI
+event = push
+status = completed
+conclusion = success
+```
+
+## Frozen research headline retained
 
 Three-seed held-out comparison:
 
@@ -75,41 +94,72 @@ CUDA: 1.561 ms
 stream hop: 1000 ms
 ```
 
-## Important limitation retained in final documentation
+## Important limitation retained
 
-The selected threshold-based rejection heuristic is weak:
+CRNN threshold-based held-out rejection:
 
 ```text
-CRNN held-out rejection rate ~4.69%
-CRNN held-out false acceptance rate ~95.31%
+rejection rate      ~4.69%
+false acceptance    ~95.31%
 ```
 
-Therefore the project does not claim robust open-set or unknown-sound recognition.
+Therefore the project does not claim robust unknown/open-set recognition.
 
-## Completion checks for 16B
+## Phase 16C consistency audit
 
-Run:
+The repository audit found no actionable defect in the scientific source code/config protocol, but found stale documentation/metadata state in older files.
 
-```powershell
-python -m pytest tests/test_final_documentation_contract.py -v
-python -m pytest
-git diff --check
-git diff --stat
+Phase 16C updates:
+
+```text
+implementation status
+requirements traceability
+Persian implementation report
+verification record
+setup/testing/troubleshooting guides
+project log
+changelog
+roadmap
+selected historical phase statuses
+architecture UI wording
+Makefile convenience commands
+dependency metadata / removal of the stale pseudo-lock
+documentation contract assertions
 ```
 
-Phase 16 can be marked **USER VERIFIED + COMMITTED** after these checks pass and the final documentation commit is recorded.
+Phase 17 defense material is intentionally not rewritten here; it belongs to the next phase.
+
+## Phase 16C local acceptance
+
+User-local verification completed successfully:
+
+```text
+documentation contract: 8 passed
+full repository suite: 181 passed
+git diff --check: PASS
+git diff --check exit code: 0
+changed-file scope: documentation / repository metadata only
+scientific source/config/artifacts/workflow: unchanged
+```
+
+Phase 16C strengthens assertions inside the existing documentation contract instead of adding new test functions.
+
+The Git commit, push, and hosted CI result are repository-closure actions recorded separately in Git/GitHub history; they do not change the local verification evidence above.
 
 ## Scientific boundary
 
-Phase 16B is documentation-only. It must not change:
+Phase 16C must not change:
 
 ```text
 models
+scientific configuration
 checkpoints
 thresholds
 preprocessing
-split protocol
+split/mixing protocol
 frozen held-out results
-runtime benchmark artifacts
+runtime benchmark results
 deployment selection
 ```
+
+Phase 17 must not begin until the Phase-16C repository milestone is committed, pushed, and its hosted CI run is green.

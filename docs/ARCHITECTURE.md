@@ -57,7 +57,7 @@ Responsibilities:
 waveform -> MelSpectrogram(power) -> log -> per-window feature standardization
 ```
 
-The exact same class is serialized by configuration and reconstructed for inference.
+The exact same configuration is reconstructed for inference.
 
 ### 6. Models (`models.py`)
 
@@ -132,8 +132,12 @@ Responsibilities:
 Local-only Gradio interface:
 - upload an audio file or record from the browser microphone,
 - analyze successive windows,
-- display active labels and class scores,
-- plot score trajectories.
+- display active labels, class scores, frozen thresholds, timestamps, and processing time,
+- retain timestamped live-window history,
+- switch history ordering between newest-first and oldest-first,
+- preserve results on Stop and clear them only through the explicit clear control.
+
+The UI intentionally does **not** claim score calibration or robust unknown/open-set recognition.
 
 This UI is deliberately separate from the scientific evaluation pipeline.
 
@@ -151,20 +155,23 @@ This makes the project easy to inspect, reproduce, and defend academically.
 
 ## Data Flow Invariants
 
-1. Original source files do not cross train/validation/test splits.
+1. Original source groups do not cross train/validation/test research manifests.
 2. Mixtures are created only from sources in the same split.
 3. Test data is never passed to training or threshold tuning.
 4. Model outputs are logits; sigmoid is applied for inference/evaluation.
 5. Thresholds are saved separately and class-order checked when loaded.
 6. “No confident known class” is not equated with universal unknown detection.
+7. After the frozen held-out result is observed, model/preprocessing/threshold changes require a newly declared experimental protocol.
 
 ## Deployment
 
 Primary deployment is local:
 
 - training: CPU or optional CUDA GPU,
-- inference: CPU target,
+- inference: CPU-capable with optional CUDA acceleration,
 - UI: localhost,
-- microphone: OS audio stack through optional `sounddevice`.
+- microphone: browser capture or OS audio stack through `sounddevice`.
+
+The frozen deployment is CRNN seed 23, selected using validation mAP only. CPU and CUDA both satisfy the measured one-second-hop no-backlog criterion on the verified development laptop.
 
 Docker is intentionally not the primary path because direct microphone/GUI/GPU device mapping would make a small academic project less portable rather than more portable.

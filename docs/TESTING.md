@@ -8,74 +8,121 @@ Run tests from the repository root with the project virtual environment active:
 python -m pytest
 ```
 
-The repository configures a local `.pytest_tmp` base directory to avoid the Windows user-temp ACL problem encountered during Phase 1.
+The repository configures a local `.pytest_tmp` base directory to avoid the Windows user-temp ACL problem encountered in Phase 1.
 
-## Phase-focused tests
+## Current verified repository baseline
 
-### Configuration tests
+At the end of Phase 16B:
+
+```text
+documentation contract: 8 passed
+full repository suite: 181 passed
+```
+
+Phase 16C changes documentation/metadata consistency only and must preserve a completely green full suite. Later phases may add tests, so the exact count can increase.
+
+## Important focused suites
+
+### Configuration / audio
 
 ```powershell
 python -m pytest tests/test_config.py -v
-```
-
-These tests prove that valid configurations load and invalid experimental settings fail before training.
-
-### Audio signal tests
-
-```powershell
 python -m pytest tests/test_audio.py -v
-```
-
-These tests cover crop/pad semantics, RMS normalization, silence handling, clipping protection, and controlled source levels.
-
-### Audio file I/O tests
-
-```powershell
 python -m pytest tests/test_audio_io.py -v
 ```
 
-These tests create temporary WAV files, verify stereo-to-mono conversion, verify resampling, and check save/load behavior.
+These protect config validation, crop/pad semantics, normalization, mixing, file decoding, mono conversion, resampling, and save/load behavior.
 
-## Full regression test
+### Features / models
 
-After phase-specific tests pass:
+```powershell
+python -m pytest tests/test_features.py tests/test_models.py tests/test_crnn.py -v
+```
+
+These protect the shared Log-Mel representation and CNN/CRNN tensor contracts.
+
+### Scientific protocol
+
+```powershell
+python -m pytest `
+  tests/test_experiment_protocol.py `
+  tests/test_evaluation_protocol.py `
+  tests/test_frozen_results.py `
+  -v
+```
+
+These protect validation-only selection, frozen evaluation provenance, and multi-seed result aggregation.
+
+### Runtime / streaming / UI
+
+```powershell
+python -m pytest `
+  tests/test_runtime_protocol.py `
+  tests/test_streaming.py `
+  tests/test_ui_support.py `
+  tests/test_ui_stop_preservation.py `
+  tests/test_phase13_demo_acceptance.py `
+  -v
+```
+
+### Repository QA / CI / clean install / documentation
+
+```powershell
+python -m pytest `
+  tests/test_phase14_qa.py `
+  tests/test_ci_contract.py `
+  tests/test_clean_install_contract.py `
+  tests/test_final_documentation_contract.py `
+  -v
+```
+
+## Full regression rule
+
+After any focused suite:
 
 ```powershell
 python -m pytest
 ```
 
-A phase should not be committed if it breaks an already verified test from an earlier phase.
+Do not commit a phase if it breaks an earlier verified test.
 
-## Interpreting failures
+## Historical baselines
 
-- Failure in `test_config.py`: configuration validation or expected experiment constraints changed.
-- Failure in `test_audio.py`: signal-processing semantics changed; do not proceed to dataset/model work until resolved.
-- Failure in `test_audio_io.py`: file decoding, resampling, dtype, or temporary-file behavior is broken.
-- `PermissionError` involving the Windows user temp directory: verify that the current `pyproject.toml` still contains the repository-local `--basetemp=.pytest_tmp` setting.
-
-## Why these are unit tests
-
-These tests intentionally avoid UrbanSound8K and the GPU. They verify deterministic low-level behavior in isolation. Dataset integration and learned-model behavior are tested in later phases.
-
-## Dataset integration regression discovered in Phase 3
-
-A full-suite run found that `dataset.py` still imports `apply_global_time_shift`.
-The phase-specific audio tests had not exercised that import path, so the missing
-compatibility helper was detected only by the regression suite. The helper now has
-explicit unit tests for positive, negative, zero, oversized, and invalid shifts.
-This is an example of why phase-specific tests and full regression tests are both
-required.
-
-## Phase 3 verified baseline
-
-On the target Windows development laptop, Phase 3 ended with:
+Earlier phase counts remain useful as historical checkpoints, not current totals. For example Phase 3 ended with:
 
 ```text
-python -m pytest tests/test_config.py -v       -> 8 passed
-python -m pytest tests/test_audio.py -v        -> 13 passed
-python -m pytest tests/test_audio_io.py -v     -> 4 passed
-python -m pytest tests/test_demo_dataset.py -v -> 1 passed
-python -m pytest                               -> 31 passed
+test_config.py        8 passed
+test_audio.py        13 passed
+test_audio_io.py      4 passed
+test_demo_dataset.py  1 passed
+full suite            31 passed
 ```
 
-This is the regression baseline that later phases must preserve or intentionally update.
+Those numbers should not be confused with the current repository-wide regression count.
+
+## Windows temp-directory failure
+
+If pytest reports a `PermissionError` under:
+
+```text
+C:\Users\<user>\AppData\Local\Temp\pytest-of-<user>
+```
+
+verify that `pyproject.toml` still contains:
+
+```toml
+[tool.pytest.ini_options]
+addopts = "-q --basetemp=.pytest_tmp"
+```
+
+The normal command should remain:
+
+```powershell
+python -m pytest
+```
+
+## Scientific-test boundary
+
+Repository tests and CI must not silently rerun the frozen held-out scientific experiment. The held-out result is a frozen research artifact, not a development regression target.
+
+Tests may verify protocol logic, artifact hashes/metadata, synthetic fixtures, and engineering paths without reopening the scientific test set.

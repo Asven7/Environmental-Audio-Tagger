@@ -1,57 +1,34 @@
 # Interactive Implementation Roadmap
 
-This roadmap is intentionally phase-gated. A phase is not considered complete until the user verifies the required local checks.
+This roadmap is phase-gated. A phase is considered complete only after its required local acceptance is verified and its repository milestone is recorded.
 
-## Phase 0 — Implementation Audit and Scope Lock
-Audit proposal, prior recommendations, and existing code. Lock architecture/scope and identify local prerequisites.
+| Phase | Scope | Status |
+|---|---|---|
+| 0 | Implementation audit and scope lock | ✅ USER VERIFIED |
+| 1 | Local development environment | ✅ USER VERIFIED |
+| 2 | Repository baseline, Git, documentation skeleton | ✅ USER VERIFIED |
+| 3 | Core audio and configuration foundation | ✅ USER VERIFIED |
+| 4 | Dataset protocol and manifest generation | ✅ USER VERIFIED |
+| 5 | Controlled multi-label mixture pipeline | ✅ USER VERIFIED |
+| 6 | Log-Mel feature pipeline | ✅ USER VERIFIED |
+| 7 | CNN baseline architecture | ✅ USER VERIFIED |
+| 8 | CRNN architecture | ✅ USER VERIFIED |
+| 9 | Training protocol and reproducibility | ✅ USER VERIFIED |
+| 10 | Threshold tuning and frozen evaluation protocol | ✅ USER VERIFIED |
+| 11 | Multi-seed research experiments + frozen results | ✅ USER VERIFIED |
+| 12 | Frozen inference and runtime benchmark | ✅ USER VERIFIED |
+| 13 | Local UI and microphone integration | ✅ USER VERIFIED |
+| 14 | Testing/QA/troubleshooting hardening | ✅ USER VERIFIED |
+| 15 | GitHub and CI | ✅ USER VERIFIED + CI GREEN |
+| 16A | Fresh-clone / fresh-venv clean installation | ✅ USER VERIFIED |
+| 16B | Final README and documentation consolidation | ✅ USER VERIFIED + CI GREEN |
+| 16C | Final repository documentation/metadata consistency cleanup | ✅ USER VERIFIED |
+| 17 | University demo, defense preparation, academic release/tag | ⛔ NOT STARTED |
 
-## Phase 1 — Local Development Environment
-Identify OS/shell, Python, Git, NVIDIA driver/GPU/VRAM, disk/RAM, and create a clean Python virtual environment. Install the minimum CPU-capable dependency set first; enable CUDA only after compatibility is verified.
+## Scientific freeze
 
-## Phase 2 — Repository Baseline, Git, and Documentation Skeleton
-Unpack/reconcile the existing repository, fix `.gitignore`, resolve misleading configuration files, initialize Git, establish the stable baseline commit, and add the first verified setup/testing/Git documents.
+Phases 12 onward operate on the already frozen Phase-11 scientific result. Documentation, UI, QA, CI, clean-install work, and defense preparation must not use held-out results to retune thresholds, change preprocessing, change architecture, or select a different experiment protocol.
 
-## Phase 3 — Core Audio and Configuration Foundation
-Walk through and verify config validation, audio loading, mono conversion, resampling, fixed-window crop/pad, RMS normalization, and unit tests.
+## Next gate
 
-## Phase 4 — Dataset Protocol and Manifest Generation
-Prepare UrbanSound8K metadata, review/freeze target and held-out classes, freeze folds, generate manifests, enforce source leakage checks, and document dataset handling/licensing.
-
-## Phase 5 — Controlled Multi-Label Mixture Pipeline
-Verify relative-level mixing, temporal-overlap synthesis, deterministic mixture metadata, and edge-case tests.
-
-## Phase 6 — Log-Mel Feature Pipeline
-Verify STFT/Mel parameters, feature normalization, tensor shapes, train/inference parity, and resource behavior.
-
-## Phase 7 — CNN Baseline
-Train/evaluate the CNN on a small smoke subset first, verify checkpointing and metrics, then prepare the real-data run.
-
-## Phase 8 — CRNN (CNN + GRU)
-Implement/verify the temporal model, compare parameter count and behavior with CNN, and keep LSTM outside the default experiment matrix.
-
-## Phase 9 — Training Protocol and Reproducibility
-Verify `BCEWithLogitsLoss`, class weighting, optimizer, early stopping, deterministic seeds, checkpoint selection, and experiment metadata.
-
-## Phase 10 — Threshold Tuning and Frozen Evaluation
-Tune thresholds on validation only; evaluate frozen checkpoints on test; produce micro/macro metrics, mAP, Hamming Loss, per-class and controlled-condition breakdowns.
-
-## Phase 11 — Multi-Seed Research Experiments
-Run the final CNN/CRNN experiment matrix, aggregate mean/std, record actual hardware and runtime, and generate defensible result tables without fabricated claims.
-
-## Phase 12 — File Inference and Runtime Benchmark
-Verify end-to-end file windowing, prediction output, batch=1 CPU/GPU timing, p95 no-backlog criterion, and failure handling.
-
-## Phase 13 — Local UI and Microphone Integration
-Verify the Gradio demo, then optionally verify continuous microphone capture on the actual machine. Keep the UI separate from scientific evaluation.
-
-## Phase 14 — Testing, QA, and Troubleshooting Hardening
-Expand meaningful automated coverage, build the manual test checklist, run resource/performance checks, and document encountered failures/fixes.
-
-## Phase 15 — GitHub and CI
-Create/connect the GitHub repository with user authorization, push the stable history, and add a simple CI workflow if local installation/tests are already reliable.
-
-## Phase 16 — Documentation, Clean Install, and Reproducibility Audit
-Perform a clean-install simulation and finalize README, setup, testing, troubleshooting, decisions, traceability, quickstart, project log, and changelog.
-
-## Phase 17 — University Demo and Defense Preparation
-Finalize the 5–15 minute demo script, screenshots, result tables, limitations, likely technical questions, defense notes, and academic release/tag.
+Phase 16C local verification is complete. Phase 17 must not start until the Phase-16C commit is pushed and its hosted CI run is green.
