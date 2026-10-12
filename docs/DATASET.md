@@ -1,155 +1,59 @@
-# Dataset Protocol
+# Dataset and split protocol
 
-## Primary dataset
+## Source and rights
 
-The main research dataset is UrbanSound8K. The raw dataset is stored locally under `data/UrbanSound8K/` and is never committed to Git.
+The main research corpus is **UrbanSound8K**, obtained by the user and stored outside Git, conventionally at `data/UrbanSound8K/`. The repository does not redistribute the corpus; the dataset's own license and attribution requirements apply. See [References](REFERENCES.md).
 
 Expected layout:
 
 ```text
 data/UrbanSound8K/
-├── audio/
-│   ├── fold1/
-│   ├── ...
-│   └── fold10/
-└── metadata/
-    └── UrbanSound8K.csv
+  audio/fold1/ ... audio/fold10/
+  metadata/UrbanSound8K.csv
 ```
 
-## Frozen classes
+## Classes
 
-Known target classes:
+Known labels (eight outputs): `air_conditioner`, `children_playing`, `dog_bark`, `drilling`, `engine_idling`, `jackhammer`, `siren`, `car_horn`.
 
-- `air_conditioner`
-- `children_playing`
-- `dog_bark`
-- `drilling`
-- `engine_idling`
-- `jackhammer`
-- `siren`
-- `car_horn`
+For the limited rejection experiment, `gun_shot` and `street_music` are held out of training. They are evaluated only as examples outside the eight known target categories; this does not establish broad open-set generalization.
 
-Held-out OOD classes:
+## Train, validation and test separation
 
-- `gun_shot`
-- `street_music`
+- **Train:** official folds 1–7
+- **Validation:** official fold 8
+- **Test:** official folds 9–10
 
-The held-out classes are never used to train the eight-output known-class classifier. Their validation/test samples are used only for the limited rejection experiment.
+The split is defined **before** constructing synthetic mixtures. Each source is first associated with an occurrence identifier `(fsID, classID, occurrenceID)`. Where the broader Freesound recording identifier `fsID` spans the configured train/validation/test partitions, **all** its rows are excluded instead of being reassigned. The recorded metadata audit excluded `fsID` values `106905` and `180937` (102 clips in total).
 
-## Frozen fold partition
+The recorded single-source manifest counts, after the cross-split exclusion, were:
 
-- train: folds 1–7
-- validation: fold 8
-- test: folds 9–10
-
-Official fold labels are preserved; clips are never reassigned to a different fold.
-
-## Source identity and leakage policy
-
-UrbanSound8K filenames encode `fsID-classID-occurrenceID-sliceID.wav`.
-
-The hard occurrence identity used by the project is:
-
-```text
-(fsID, classID, occurrenceID)
-```
-
-All slices of one occurrence must remain in one official fold.
-
-The real metadata also contains a very small number of broader `fsID` recordings whose different annotated events appear across the configured train/validation/test boundary. Because those clips originate from the same Freesound recording and may share background/acoustic conditions, the project applies a stricter research rule:
-
-> Any `fsID` that spans more than one configured split is excluded from **all** research manifests.
-
-This is an exclusion rule, not a reassignment rule. It strengthens source independence while preserving official fold membership for every retained clip.
-
-The Phase 4 real-data audit found two cross-split `fsID` recordings (`106905`, `180937`). The code detects these dynamically from metadata and the configured folds.
-
-## Single-source manifests
-
-Phase 4 creates only single-source manifests. Mixtures are deliberately disabled until Phase 5.
-
-Manifest columns include:
-
-```text
-sample_id
-split
-sample_type
-source_a
-source_b
-source_group_a
-source_group_b
-label_indices
-label_names
-relative_db
-overlap_ratio
-is_ood
-```
-
-`source_group_a` uses the annotated-occurrence identity so overlapping slices from one event can be tracked as one source group.
-
-## Reproducibility
-
-Before manifest generation, run:
-
-```powershell
-python scripts/inspect_urbansound8k.py --dataset-root data\UrbanSound8K
-```
-
-Then generate Phase 4 manifests without mixtures:
-
-```powershell
-python scripts/prepare_urbansound8k.py --dataset-root data\UrbanSound8K --output-dir artifacts\manifests
-```
-
-Do **not** pass `--include-mixtures` during Phase 4.
-
-The generated `manifest_summary.json` records the target/held-out classes, source-group unit, cross-split recording policy, excluded `fsID` values, excluded clip count, and per-split manifest counts.
-
-## Verified Phase 4 manifest baseline
-
-Real local verification produced the following leakage-safe single-source manifests:
-
-| Split | Known singles | OOD singles |
+| Split | Known single clips | Held-out clips |
 |---|---:|---:|
-| train | 5209 | 0 |
-| validation | 673 | 130 |
-| test | 1374 | 263 |
+| Train | 5,209 | 0 |
+| Validation | 673 | 130 |
+| Test | 1,374 | 263 |
 
-Two broader `fsID` recordings (`106905`, `180937`) crossed configured split boundaries and were excluded in full, removing 102 clips. Post-exclusion metadata totals are 6190 train, 803 validation, and 1637 test clips. No mixtures are included in the Phase 4 baseline.
+These counts come from the project's historical local audit. The full raw UrbanSound8K copy and generated research manifest files are not included in this public Git checkout.
 
-## Phase 5 controlled mixtures
+## Controlled two-source mixtures
 
-After the Phase 4 single-source protocol is frozen, Phase 5 may generate synthetic two-label rows with `--include-mixtures`. Mixtures are created only from known single-source rows already assigned to the same split; held-out OOD classes are not used as known-class mixture sources.
+The model's multi-label examples are primarily derived from mixtures of two **different known classes** selected within the same split. Mix construction uses the following frozen factors:
 
-The controlled generator balances the 28 unordered known-class pairs and the configured relative-dB/temporal-overlap conditions, prevents duplicate occurrence-pair recipes, avoids pairing two annotations from the same broader UrbanSound8K `fsID` when identifiable, and records a deterministic protocol audit in `manifest_summary.json`.
+- Relative first-versus-second source level: **−6, 0, +6 dB**.
+- Nominal portion of the second source present in the output window: **0.25, 0.50, 1.00**.
+- Generated recipe counts: **4,000 train**, **600 validation**, **1,200 test**.
 
-Recommended Phase 5 output directory:
+Mixture metadata records both source paths and groups, label indices/names, relative level, overlap ratio and split. Recipes balance unordered class pairs and experimental conditions; two source events from the same broader `fsID` are not paired when that identity is available. The audio is synthesized on demand rather than committing derived mixture WAV files.
+
+**Interpretation:** UrbanSound8K is fundamentally a single-label dataset, and combining recordings is not equivalent to annotating naturally overlapping real-world scenes. A label identifies a source recording's annotation; it does not guarantee precise event presence throughout every two-second crop.
+
+## Generating and checking manifests
 
 ```powershell
-python scripts/prepare_urbansound8k.py --dataset-root data\UrbanSound8K --output-dir artifacts\manifests_phase5 --include-mixtures
+python scripts\inspect_urbansound8k.py --dataset-root data\UrbanSound8K
+python scripts\prepare_urbansound8k.py --dataset-root data\UrbanSound8K --output-dir artifacts\manifests_phase5 --include-mixtures
+python scripts\inspect_mixture_manifests.py --manifest-dir artifacts\manifests_phase5
 ```
 
-Then audit the generated metadata:
-
-```powershell
-python scripts/inspect_mixture_manifests.py --manifest-dir artifacts\manifests_phase5
-```
-
-Generated mixtures remain metadata recipes; mixed WAV files are synthesized on demand by the dataset layer and are not committed to Git.
-
-
-### Synthetic demo compatibility
-
-The no-repeat source-pair rule is strict for research manifests carrying explicit `occurrence:fsID:classID:occurrenceID` identities. Tiny synthetic demo manifests use path-fallback identities and may contain fewer possible source pairs than the configured smoke-test mixture count; only those demo/path-fallback manifests may reuse a source pair. This exception is for engineering smoke tests only and is never used for UrbanSound8K research manifests or reported scientific results.
-
-## Verified Phase 5 mixture baseline
-
-The real controlled-mixture manifest generation has been locally verified with the frozen Phase 4 protocol.
-
-| Split | Known singles | Controlled mixtures |
-|---|---:|---:|
-| train | 5209 | 4000 |
-| validation | 673 | 600 |
-| test | 1374 | 1200 |
-
-The generated research manifests passed cross-split source-group leakage checks, class-pair balancing, dB/overlap-condition balancing, and exact mixture-pair uniqueness checks. A real-audio smoke test over three train mixtures also passed without writing derived WAV files.
+These commands use the current configuration and local dataset. **Generating new artifacts is not a license to revise frozen reported test results.** See [Methods](METHODS.md) for how the dataset enters training and [Results](RESULTS.md) for the already recorded outcomes.

@@ -10,6 +10,7 @@ import torch
 from .audio import load_audio, normalize_rms, pad_or_crop, rms_dbfs
 from .checkpoints import load_checkpoint, load_thresholds
 from .features import LogMelExtractor
+from .streaming import iter_waveform_windows
 
 
 @dataclass
@@ -56,6 +57,8 @@ class AudioTagger:
         self.hop_seconds = float(project_config.get("hop_seconds", self.window_seconds / 2.0))
         self.window_samples = round(self.sample_rate * self.window_seconds)
         self.target_rms_dbfs = float(project_config.get("target_rms_dbfs", -20.0))
+        self.model_spec: dict = {}
+        self.training_metadata: dict = {}
 
     @classmethod
     def from_files(
@@ -69,7 +72,7 @@ class AudioTagger:
         extractor = LogMelExtractor(**feature_cfg)
         class_names = list(payload["class_names"])
         thresholds = load_thresholds(thresholds_path, expected_classes=class_names)
-        return cls(
+        tagger = cls(
             model=model,
             extractor=extractor,
             class_names=class_names,
@@ -77,6 +80,9 @@ class AudioTagger:
             project_config=payload["project_config"],
             device=device,
         )
+        tagger.model_spec = dict(payload["model_spec"])
+        tagger.training_metadata = dict(payload.get("training_metadata", {}))
+        return tagger
 
     @torch.no_grad()
     def predict_waveform(self, waveform: np.ndarray) -> Prediction:
@@ -125,27 +131,24 @@ class AudioTagger:
         """
         waveform = load_audio(path, self.sample_rate)
         hop_seconds = float(hop_seconds if hop_seconds is not None else self.hop_seconds)
-        hop_samples = max(1, round(hop_seconds * self.sample_rate))
-        if waveform.size <= self.window_samples:
-            starts = [0]
-        else:
-            starts = list(range(0, max(1, waveform.size - self.window_samples + 1), hop_samples))
-            final_start = max(0, waveform.size - self.window_samples)
-            if starts[-1] != final_start:
-                starts.append(final_start)
+        if not np.isfinite(hop_seconds) or hop_seconds <= 0:
+            raise ValueError("hop_seconds must be a positive finite number")
+        if hop_seconds > self.window_seconds:
+            raise ValueError("hop_seconds must not exceed window_seconds")
 
         records: list[dict] = []
-        for index, start in enumerate(starts):
-            end = start + self.window_samples
-            window = waveform[start:end]
-            if window.size < self.window_samples:
-                window = pad_or_crop(window, self.window_samples, strategy="start")
-            prediction = self.predict_waveform(window)
+        for window in iter_waveform_windows(
+            waveform,
+            sample_rate=self.sample_rate,
+            window_seconds=self.window_seconds,
+            hop_seconds=hop_seconds,
+        ):
+            prediction = self.predict_waveform(window.waveform)
             records.append(
                 {
-                    "window_index": index,
-                    "start_seconds": start / self.sample_rate,
-                    "end_seconds": min(end, waveform.size) / self.sample_rate,
+                    "window_index": window.index,
+                    "start_seconds": window.start_seconds,
+                    "end_seconds": window.valid_end_seconds,
                     **prediction.as_dict(),
                 }
             )

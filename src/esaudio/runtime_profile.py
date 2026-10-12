@@ -121,19 +121,13 @@ class RuntimeProfiler:
         self.class_names = list(self.tagger.class_names)
         self.thresholds = np.asarray(self.tagger.thresholds, dtype=np.float32)
 
-        payload = torch.load(
-            self.checkpoint_path,
-            map_location="cpu",
-            weights_only=False,
-        )
-        project = dict(payload["project_config"])
-        self.model_spec = dict(payload["model_spec"])
-        self.training_metadata = dict(payload.get("training_metadata", {}))
+        self.model_spec = dict(self.tagger.model_spec)
+        self.training_metadata = dict(self.tagger.training_metadata)
 
-        self.sample_rate = int(project["sample_rate"])
-        self.window_seconds = float(project["window_seconds"])
-        self.hop_seconds = float(project["hop_seconds"])
-        self.target_rms_dbfs = float(project.get("target_rms_dbfs", -20.0))
+        self.sample_rate = self.tagger.sample_rate
+        self.window_seconds = self.tagger.window_seconds
+        self.hop_seconds = self.tagger.hop_seconds
+        self.target_rms_dbfs = self.tagger.target_rms_dbfs
         self.window_samples = round(self.sample_rate * self.window_seconds)
 
         if self.sample_rate <= 0:

@@ -42,6 +42,6 @@ def test_checkpoint_roundtrip_and_inference(tmp_path):
     audio_path = tmp_path / "long.wav"
     sf.write(audio_path, np.zeros(16000, dtype=np.float32), 8000)
     windows = tagger.predict_file_windows(audio_path)
-    assert len(windows) == 3  # 1 s window, 0.5 s hop over a 2 s file
-    assert windows[0]["start_seconds"] == 0.0
+    assert len(windows) == 4  # Fixed 0.5 s hops include the final padded window
+    assert [item["start_seconds"] for item in windows] == [0.0, 0.5, 1.0, 1.5]
     assert windows[-1]["end_seconds"] == 2.0

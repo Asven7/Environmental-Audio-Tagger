@@ -26,17 +26,17 @@ desktop.ini
 .env
 .env.*
 
-# Local datasets (UrbanSound8K must not be committed)
+# Local datasets (UrbanSound8K is not redistributed)
 data/
 UrbanSound8K/
 
-# Model checkpoints are ignored by default.
+# Model checkpoints are ignored by default
 *.pt
 *.pth
 *.ckpt
 
-# Generated artifacts are ignored by default. Keep only the small, synthetic,
-# repository demo artifacts used for smoke testing and professor demonstrations.
+# Generated research artifacts are ignored. Retain the small synthetic files
+# needed to test inference from a fresh checkout.
 artifacts/*
 !artifacts/.gitkeep
 !artifacts/demo_cnn/

@@ -22,11 +22,7 @@ def main() -> None:
 
     tagger = AudioTagger.from_files(args.checkpoint, args.thresholds, device=args.device)
     result = benchmark_manifest(tagger, args.manifest, args.audio_root, args.max_samples)
-    result["stream_hop_ms"] = tagger.window_seconds * 0 + 1000.0  # proposal default; overridden below when known
-    # The checkpoint stores hop_seconds separately.
-    import torch
-    payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-    result["stream_hop_ms"] = float(payload["project_config"].get("hop_seconds", 1.0)) * 1000.0
+    result["stream_hop_ms"] = tagger.hop_seconds * 1000.0
     result["meets_no_backlog_criterion_p95"] = bool(result["total_ms_p95"] < result["stream_hop_ms"])
     if args.output:
         path = Path(args.output)

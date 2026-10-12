@@ -1,128 +1,49 @@
-# Testing Guide
+# Verification and tests
 
-## General rule
+## Running the suite
 
-Run tests from the repository root with the project virtual environment active:
+After installation from the repository root:
 
 ```powershell
+python -m pip check
+python -m compileall -q src scripts tests
 python -m pytest
 ```
 
-The repository configures a local `.pytest_tmp` base directory to avoid the Windows user-temp ACL problem encountered in Phase 1.
+The project uses pytest with its base temporary directory set to `.pytest_tmp` in `pyproject.toml`, reflecting a Windows ACL issue encountered in the recorded setup.
 
-## Current verified repository baseline
-
-At the end of Phase 16B:
-
-```text
-documentation contract: 8 passed
-full repository suite: 181 passed
-```
-
-Phase 16C changes documentation/metadata consistency only and must preserve a completely green full suite. Later phases may add tests, so the exact count can increase.
-
-## Important focused suites
-
-### Configuration / audio
+Useful focused checks:
 
 ```powershell
-python -m pytest tests/test_config.py -v
-python -m pytest tests/test_audio.py -v
-python -m pytest tests/test_audio_io.py -v
+python -m pytest tests\test_audio.py tests\test_audio_io.py tests\test_config.py -v
+python -m pytest tests\test_models.py tests\test_crnn.py tests\test_features.py -v
+python -m pytest tests\test_experiment_protocol.py tests\test_evaluation_protocol.py tests\test_frozen_results.py -v
+python -m pytest tests\test_streaming.py tests\test_ui_support.py tests\test_ui_stop_preservation.py -v
+python -m pytest tests\test_final_documentation_contract.py -v
 ```
 
-These protect config validation, crop/pad semantics, normalization, mixing, file decoding, mono conversion, resampling, and save/load behavior.
+## Verification layers
 
-### Features / models
+| Layer | Verifies | Does not establish |
+|---|---|---|
+| Unit and integration tests | Audio conversions, window shapes, model forward passes, scoring and state handling | General real-world classification accuracy |
+| Protocol tests | Deterministic mixture metadata, source isolation, freeze bookkeeping and aggregation | A rerun of the original training/evaluation |
+| Synthetic example tests | End-to-end software plumbing with generated tones | UrbanSound8K or natural-sound scientific performance |
+| GitHub Actions | CPU installation, imports, compilation, CLI surfaces and pytest | A working local microphone, CUDA or external data |
+| Local recorded engineering checks | Device-specific runtime, UI/microphone acceptance and previously recorded outputs | Independent replication without original files |
 
-```powershell
-python -m pytest tests/test_features.py tests/test_models.py tests/test_crnn.py -v
-```
+## CI
 
-These protect the shared Log-Mel representation and CNN/CRNN tensor contracts.
+The repository's `.github/workflows/ci.yml` runs on push to `main`, on pull requests and by manual dispatch. It uses an Ubuntu-hosted Python 3.11 CPU environment with read-only repository permissions. The job installs `.[dev,ui]`, runs `pip check`, compiles Python sources, executes the UI and microphone CLI help checks and runs pytest.
 
-### Scientific protocol
+Four successful CI runs were observed on the referenced repository by **8 October 2026**, including the run of the audited commit `cc8837e...`. This historical status should not be represented as proof of successful checks on any future changes until those checks actually run.
 
-```powershell
-python -m pytest `
-  tests/test_experiment_protocol.py `
-  tests/test_evaluation_protocol.py `
-  tests/test_frozen_results.py `
-  -v
-```
+## Recorded historical local results
 
-These protect validation-only selection, frozen evaluation provenance, and multi-seed result aggregation.
+A fresh clone with a fresh virtual environment reportedly passed 173 tests and `pip check`. A later local documentation/metadata verification reportedly passed 181 tests. These results were recorded in the earlier project documentation; this page does **not** claim to have independently rerun them.
 
-### Runtime / streaming / UI
+## Scope of evaluation
 
-```powershell
-python -m pytest `
-  tests/test_runtime_protocol.py `
-  tests/test_streaming.py `
-  tests/test_ui_support.py `
-  tests/test_ui_stop_preservation.py `
-  tests/test_phase13_demo_acceptance.py `
-  -v
-```
+The selected seed/checkpoints and the held-out test metrics are frozen. Routine unit tests, packaging fixes, and documentation changes do not justify rerunning the held-out test set or tuning against it. No test in public CI replaces the separate scientific evaluation performed with UrbanSound8K data and original experiment artifacts.
 
-### Repository QA / CI / clean install / documentation
-
-```powershell
-python -m pytest `
-  tests/test_phase14_qa.py `
-  tests/test_ci_contract.py `
-  tests/test_clean_install_contract.py `
-  tests/test_final_documentation_contract.py `
-  -v
-```
-
-## Full regression rule
-
-After any focused suite:
-
-```powershell
-python -m pytest
-```
-
-Do not commit a phase if it breaks an earlier verified test.
-
-## Historical baselines
-
-Earlier phase counts remain useful as historical checkpoints, not current totals. For example Phase 3 ended with:
-
-```text
-test_config.py        8 passed
-test_audio.py        13 passed
-test_audio_io.py      4 passed
-test_demo_dataset.py  1 passed
-full suite            31 passed
-```
-
-Those numbers should not be confused with the current repository-wide regression count.
-
-## Windows temp-directory failure
-
-If pytest reports a `PermissionError` under:
-
-```text
-C:\Users\<user>\AppData\Local\Temp\pytest-of-<user>
-```
-
-verify that `pyproject.toml` still contains:
-
-```toml
-[tool.pytest.ini_options]
-addopts = "-q --basetemp=.pytest_tmp"
-```
-
-The normal command should remain:
-
-```powershell
-python -m pytest
-```
-
-## Scientific-test boundary
-
-Repository tests and CI must not silently rerun the frozen held-out scientific experiment. The held-out result is a frozen research artifact, not a development regression target.
-
-Tests may verify protocol logic, artifact hashes/metadata, synthetic fixtures, and engineering paths without reopening the scientific test set.
+For a clear breakdown of what is and is not independently reproducible from GitHub, see [Reproducibility](REPRODUCIBILITY.md).

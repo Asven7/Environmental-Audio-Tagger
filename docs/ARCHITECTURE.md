@@ -1,177 +1,56 @@
-# Architecture
+# Software architecture
 
-## Architectural Style
+Environmental Audio Tagger is a local Python project with a `src/` package layout. The training, evaluation and inference commands share implementations instead of maintaining separate model definitions. There is no application database or hosted inference API.
 
-The project is intentionally a **single local Python application/research repository**, not a distributed system. Training, evaluation, inference, and UI reuse the same package modules.
-
-No database, REST API, authentication service, queue, cloud service, or microservice is required.
-
-## Components
-
-### 1. Configuration (`config.py` + YAML)
-
-Responsibilities:
-- load project parameters,
-- validate required values,
-- keep dataset/model/training/evaluation choices explicit.
-
-Input: YAML file.
-
-Output: validated Python dictionary.
-
-### 2. Manifest Builder (`manifests.py`)
-
-Responsibilities:
-- map official UrbanSound8K folds to train/validation/test,
-- keep target and held-out classes separate,
-- build single-sample records,
-- build deterministic controlled two-source mixture records,
-- enforce source-level split isolation.
-
-No mixed audio is permanently materialized; manifests describe how to build mixtures on demand.
-
-### 3. Waveform Processing (`audio.py`)
-
-Responsibilities:
-- read audio safely,
-- downmix to mono,
-- resample,
-- crop/pad to fixed windows,
-- bounded RMS normalization,
-- controlled two-source mixing,
-- peak safety.
-
-### 4. Dataset (`dataset.py`)
-
-Responsibilities:
-- turn manifest rows into model-ready waveform/target pairs,
-- generate mixtures on demand,
-- use energy crop for training and fixed center crop for evaluation by default,
-- apply deterministic train-only augmentation.
-
-### 5. Feature Extraction (`features.py`)
-
-`LogMelExtractor` is the only primary learned-model representation.
+## Data path
 
 ```text
-waveform -> MelSpectrogram(power) -> log -> per-window feature standardization
+UrbanSound8K audio + metadata
+    -> source/split checks and CSV manifest recipes (manifests.py)
+    -> on-demand fixed audio windows / controlled mixtures (audio.py, dataset.py)
+    -> Log-Mel spectrograms (features.py)
+    -> CNNTagger or CRNNTagger (models.py)
+    -> window-level logits
+    -> sigmoid class scores and frozen class thresholds
 ```
 
-The exact same configuration is reconstructed for inference.
+The `config/default.yaml` file defines the research sample rate, window geometry, features, classes, model sizes and training/evaluation settings. `config/demo.yaml` defines a smaller synthetic workflow and must not be confused with the research protocol.
 
-### 6. Models (`models.py`)
+## Main modules
 
-#### CNN baseline
+| Module | Responsibility |
+|---|---|
+| `config.py` | Read and validate YAML configuration |
+| `manifests.py` | UrbanSound8K metadata validation, split isolation and balanced mixture recipes |
+| `audio.py` | Audio I/O, downmix, resample, crop/pad, normalization and mixing |
+| `dataset.py` | Load manifest examples, synthesize mixtures and apply training augmentation |
+| `features.py` | `LogMelExtractor` based on `torchaudio` |
+| `models.py` | Convolutional frontend, CNN and CNN+GRU architecture |
+| `training.py` | Seeding, mini-batch optimization, early stopping and checkpoint selection |
+| `checkpoints.py` | Model/threshold serialization and class-order checks |
+| `evaluation.py`, `evaluate_runner.py` | mAP, multi-label F1, rejection and evaluation artifacts |
+| `experiments.py`, `frozen_results.py` | Experiment index and six-run result validation/aggregation |
+| `deployment.py` | Select a CRNN research run using validation mAP |
+| `inference.py` | Single-window and whole-file model predictions |
+| `streaming.py`, `ui_support.py` | Audio-window buffering and local interaction state |
+| `runtime_profile.py` | CPU/CUDA processing-time measurement |
 
-```text
-Log-Mel
- -> ConvBlock(16)
- -> ConvBlock(32)
- -> ConvBlock(64)
- -> global mean over frequency/time
- -> dropout
- -> linear logits
-```
+## Model structure
 
-Pooling only reduces frequency inside the convolutional frontend.
+The CNN receives a Log-Mel tensor, passes it through a convolutional frontend and uses global pooling plus a linear classification head. The default frontend has channel widths 16, 32 and 64.
 
-#### CRNN
+The CRNN uses the same convolutional frontend. It averages across frequency, feeds the remaining temporal sequence into a unidirectional GRU (64 hidden units, one recurrent layer in the default configuration), averages over time and emits one logit per target class.
 
-```text
-Log-Mel
- -> same convolutional frontend
- -> mean over frequency
- -> [time, channel] sequence
- -> unidirectional GRU
- -> temporal mean pooling
- -> dropout
- -> linear logits
-```
+Both model heads produce **eight independent logits**, not a mutually exclusive softmax distribution. Training uses `BCEWithLogitsLoss`; score reporting applies sigmoid and independently selected class thresholds. Details: [Methods](METHODS.md).
 
-The default recurrent unit is GRU because it is smaller than an equivalent LSTM and adequate for the undergraduate scope. The code supports LSTM as a configuration-level experiment without changing the architecture layer.
+## Entry points and execution
 
-### 7. Training (`training.py`)
+Console entry points declared in `pyproject.toml` are `esaudio-train`, `esaudio-evaluate` and `esaudio-infer`. Research-specific scripts orchestrate manifest preparation, a predeclared seed/model matrix, threshold selection and frozen aggregation.
 
-Responsibilities:
-- deterministic seeding,
-- optional positive-class weighting,
-- Adam optimization,
-- validation mAP model selection,
-- early stopping,
-- checkpoint persistence,
-- post-selection threshold tuning using validation data only.
+The local UI (`scripts/run_ui.py`) accepts file uploads and browser microphone chunks. `scripts/live_microphone.py` uses the operating system's audio devices through `sounddevice`. These use the same inference model and thresholds. No network service is needed for the model itself; the Gradio interface listens on localhost by default.
 
-### 8. Evaluation (`evaluation.py`, `evaluate_runner.py`)
+## Scope boundaries
 
-Responsibilities:
-- thresholded multi-label metrics,
-- per-class metrics,
-- mAP,
-- Hamming Loss,
-- controlled-condition breakdowns,
-- held-out rejection behavior.
+The output is **window-level presence**, not the onset and offset of individual sounds. The threshold-only "no confident known class" state is not a reliable unknown-class detector. Long-file inference exists through multiple code paths; their treatment of a final incomplete window is being reviewed separately and should not be assumed identical in every entry point.
 
-### 9. Inference (`inference.py`)
-
-Responsibilities:
-- reconstruct a model from a checkpoint,
-- reconstruct the exact feature extractor,
-- load thresholds with class-order validation,
-- predict a single window,
-- predict overlapping windows across an entire file,
-- report timings and scores.
-
-### 10. Streaming (`streaming.py`)
-
-`StreamingWindowBuffer` receives arbitrary chunks and emits fixed windows at a fixed hop. It contains no hardware dependency, which makes it fully unit-testable.
-
-`scripts/live_microphone.py` provides the thin optional `sounddevice` adapter.
-
-### 11. UI (`scripts/run_ui.py`)
-
-Local-only Gradio interface:
-- upload an audio file or record from the browser microphone,
-- analyze successive windows,
-- display active labels, class scores, frozen thresholds, timestamps, and processing time,
-- retain timestamped live-window history,
-- switch history ordering between newest-first and oldest-first,
-- preserve results on Stop and clear them only through the explicit clear control.
-
-The UI intentionally does **not** claim score calibration or robust unknown/open-set recognition.
-
-This UI is deliberately separate from the scientific evaluation pipeline.
-
-## Communication Between Components
-
-All communication is in-process Python calls and files:
-
-- YAML configuration,
-- CSV manifests,
-- `.pt` model checkpoints,
-- JSON threshold/evaluation files,
-- CSV training history.
-
-This makes the project easy to inspect, reproduce, and defend academically.
-
-## Data Flow Invariants
-
-1. Original source groups do not cross train/validation/test research manifests.
-2. Mixtures are created only from sources in the same split.
-3. Test data is never passed to training or threshold tuning.
-4. Model outputs are logits; sigmoid is applied for inference/evaluation.
-5. Thresholds are saved separately and class-order checked when loaded.
-6. “No confident known class” is not equated with universal unknown detection.
-7. After the frozen held-out result is observed, model/preprocessing/threshold changes require a newly declared experimental protocol.
-
-## Deployment
-
-Primary deployment is local:
-
-- training: CPU or optional CUDA GPU,
-- inference: CPU-capable with optional CUDA acceleration,
-- UI: localhost,
-- microphone: browser capture or OS audio stack through `sounddevice`.
-
-The frozen deployment is CRNN seed 23, selected using validation mAP only. CPU and CUDA both satisfy the measured one-second-hop no-backlog criterion on the verified development laptop.
-
-Docker is intentionally not the primary path because direct microphone/GUI/GPU device mapping would make a small academic project less portable rather than more portable.
+See [Dataset](DATASET.md), [Usage](USAGE.md), and [Results](RESULTS.md) for assumptions and recorded performance.

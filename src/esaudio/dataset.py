@@ -26,6 +26,22 @@ def _stable_seed(*parts: object) -> int:
     return int.from_bytes(digest[:8], byteorder="little", signed=False) % (2**32)
 
 
+def _parse_ood_flag(value: object) -> bool:
+    """Parse manifest OOD flags without Python's truthiness of nonempty strings."""
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        if np.isfinite(value) and value in (0, 1):
+            return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1"}:
+            return True
+        if normalized in {"false", "0"}:
+            return False
+    raise ValueError(f"Invalid is_ood manifest value: {value!r}")
+
+
 class DeterministicAugmenter:
     """Small deterministic train-time augmentation keyed by sample and epoch."""
 
@@ -85,7 +101,8 @@ class AudioManifestDataset(Dataset):
         if "split" in self.frame:
             self.frame = self.frame[self.frame["split"].astype(str) == split].reset_index(drop=True)
         if not include_ood and "is_ood" in self.frame:
-            self.frame = self.frame[~self.frame["is_ood"].astype(bool)].reset_index(drop=True)
+            ood_flags = self.frame["is_ood"].map(_parse_ood_flag)
+            self.frame = self.frame[~ood_flags].reset_index(drop=True)
         self.sample_rate = int(config["project"]["sample_rate"])
         self.length = window_samples(config)
         self.num_classes = len(config["project"]["target_classes"])

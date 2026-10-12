@@ -1,47 +1,23 @@
-# Security and Privacy
+# Security and privacy
 
-## Threat Model
+## Deployment boundary
 
-This is a local research/demo application, not a public multi-user service. Security controls are therefore deliberately proportional to the risk.
+Environmental Audio Tagger is a **local research and engineering application**, not a hardened public multi-user inference service. The Gradio UI defaults to localhost (`127.0.0.1`) with `share=False`. Do not expose it publicly without adding authentication, file-size controls, rate limiting, secure transport and data-retention safeguards.
 
-## Audio Privacy
+## Audio data handling
 
-- File inference is local.
-- Continuous microphone inference is local.
-- The live CLI does not write captured microphone buffers to disk.
-- No external inference API is used.
-- No telemetry is implemented.
-- Do not record conversations or identifiable speech without appropriate permission.
+File prediction executes locally; no remote model API or telemetry component is implemented. The local `sounddevice` CLI does not intentionally persist captured microphone chunks. Browser/UI components may have their own temporary-file and browser permission behavior, so avoid sensitive recordings and consider their retention in any deployment. Obtain appropriate consent for identifiable speech or recordings.
 
-## UI Exposure
+UrbanSound8K raw files are not distributed in the repository. Mixture manifests contain source paths, annotations and transformation recipes.
 
-The Gradio demo defaults to:
+## Checkpoint trust
 
-```text
-server_name = 127.0.0.1
-share = False
-```
+`src/esaudio/checkpoints.py` and some related tools use `torch.load` with `weights_only=False` in the audited revision. That flag can deserialize arbitrary Python objects from a checkpoint, so **only load checkpoints from trusted sources**. Do not accept an untrusted user-supplied `.pt` file as safe merely because it has the expected filename or extension.
 
-This intentionally avoids public network exposure.
+The security audit recommends evaluating `weights_only=True` compatibility and restricting the checkpoint payload format in a separately reviewed code change, with regression tests. This documentation cleanup does **not** change checkpoint loading semantics.
 
-If a future deployment is made public, add:
-- authentication,
-- file-size limits,
-- rate limits,
-- reverse-proxy TLS,
-- stricter file validation,
-- storage/retention rules.
+## Repository hygiene
 
-Those controls are not required for the current local undergraduate scope.
+`data/`, local virtual environments and generated research checkpoints are ignored by Git. `.env` files are ignored as a precaution; the current application does not require external API keys. Check any files before committing them; source paths, metadata and locally collected audio can reveal private information.
 
-## Secrets
-
-No secret or API key is required by the current project. Runtime paths, devices, and experiment settings are supplied through YAML configuration files and command-line arguments. A local `.env` file is therefore not part of the current design; `.env` remains ignored in case a future optional integration introduces secrets.
-
-## Model/Checkpoint Trust
-
-PyTorch checkpoint loading uses `torch.load`. Load only checkpoints created by this project or another trusted source. Arbitrary untrusted serialized model files should not be accepted from users.
-
-## Dataset Handling
-
-UrbanSound8K is not redistributed. Users must obtain it according to its source terms. Generated manifests contain paths and labels, not duplicated dataset audio.
+The MIT code license does not replace independent licenses for the dataset and third-party dependencies. See [References](REFERENCES.md).

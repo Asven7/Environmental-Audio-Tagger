@@ -39,7 +39,9 @@ def load_checkpoint(
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {path}")
-    payload = torch.load(path, map_location=device, weights_only=False)
+    payload = torch.load(path, map_location=device, weights_only=True)
+    if not isinstance(payload, dict):
+        raise ValueError("Checkpoint must contain a dictionary")
     required = {
         "model_spec",
         "class_names",
